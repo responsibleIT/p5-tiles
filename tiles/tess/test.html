@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Triangle Sketch</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #2a2a2a;
+        }
+        main {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <main></main>
+    <script>
+        let triangles = [];
+        let bgColor;
+        let invertColors = false;
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            bgColor = color(240, 240, 245);
+            
+            // Create initial triangles
+            for (let i = 0; i < 30; i++) {
+                triangles.push({
+                    x: random(width),
+                    y: random(height),
+                    size: random(20, 80),
+                    rotation: random(TWO_PI),
+                    baseColor: color(random(100, 255), random(100, 255), random(100, 255)),
+                    speed: random(0.02, 0.08)
+                });
+            }
+        }
+
+        function draw() {
+            // Background with inverted colors
+            if (invertColors) {
+                background(15, 15, 20);
+            } else {
+                background(bgColor);
+            }
+            
+            // Draw and update triangles
+            for (let i = 0; i < triangles.length; i++) {
+                let tri = triangles[i];
+                
+                // Calculate distance to mouse
+                let d = dist(mouseX, mouseY, tri.x, tri.y);
+                
+                // If mouse is close, move triangle towards mouse
+                if (d < 200) {
+                    let angle = atan2(mouseY - tri.y, mouseX - tri.x);
+                    tri.x += cos(angle) * tri.speed * 5;
+                    tri.y += sin(angle) * tri.speed * 5;
+                    tri.rotation += 0.1;
+                    
+                    // Invert colors when near mouse
+                    invertColors = true;
+                } else {
+                    // Slow drift when far from mouse
+                    tri.x += random(-0.5, 0.5);
+                    tri.y += random(-0.5, 0.5);
+                    tri.rotation += tri.speed;
+                }
+                
+                // Wrap around edges
+                if (tri.x < -50) tri.x = width + 50;
+                if (tri.x > width + 50) tri.x = -50;
+                if (tri.y < -50) tri.y = height + 50;
+                if (tri.y > height + 50) tri.y = -50;
+                
+                // Draw triangle
+                push();
+                translate(tri.x, tri.y);
+                rotate(tri.rotation);
+                
+                // Color logic - invert when mouse is near
+                if (d < 200 && invertColors) {
+                    // Inverted colors
+                    fill(255 - red(tri.baseColor), 255 - green(tri.baseColor), 255 - blue(tri.baseColor), 180);
+                    stroke(255, 255, 255, 200);
+                    strokeWeight(2);
+                } else {
+                    // Normal colors
+                    fill(tri.baseColor.levels[0], tri.baseColor.levels[1], tri.baseColor.levels[2], 150);
+                    stroke(50, 50, 60, 100);
+                    strokeWeight(1);
+                }
+                
+                // Draw the triangle
+                triangle(
+                    0, -tri.size / 2,
+                    -tri.size / 2, tri.size / 2,
+                    tri.size / 2, tri.size / 2
+                );
+                pop();
+            }
+            
+            // Draw mouse follower triangle
+            push();
+            translate(mouseX, mouseY);
+            rotate(frameCount * 0.05);
+            
+            if (invertColors) {
+                fill(255, 255, 255, 200);
+                stroke(0, 0, 0, 255);
+            } else {
+                fill(255, 50, 100, 200);
+                stroke(255, 255, 255, 255);
+            }
+            strokeWeight(3);
+            
+            triangle(
+                0, -30,
+                -26, 15,
+                26, 15
+            );
+            pop();
+            
+            // Reset invert flag (will be set again next frame if mouse is near triangles)
+            invertColors = false;
+        }
+
+        function mousePressed() {
+            // Add new triangle at mouse position
+            triangles.push({
+                x: mouseX,
+                y: mouseY,
+                size: random(30, 100),
+                rotation: random(TWO_PI),
+                baseColor: color(random(100, 255), random(100, 255), random(100, 255)),
+                speed: random(0.02, 0.08)
+            });
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+    </script>
+</body>
+</html>
