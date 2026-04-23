@@ -34,7 +34,7 @@ function draw() {
   
   for (let iDingetje=0; iDingetje<100; iDingetje++){
     let eenDingetje = dingetjes[iDingetje];
-    circle(eenDingetje.centerX, eenDingetje.centerY, eenDingetje.diameter)  
+    circle(eenDingetje.centerX, eenDingetje.centerY, eenDingetje.diameter);  
   }
   // circle(dingetje.centerX, dingetje.centerY, dingetje.diameter)
 
