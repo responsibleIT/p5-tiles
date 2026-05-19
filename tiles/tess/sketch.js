@@ -1,94 +1,244 @@
-// sketch.js
-// Right-pointing triangle pattern in blue tints that scrolls smoothly to the RIGHT
-// and loops seamlessly after moving the width of EXACTLY 3 triangles.
-
-let triSide = 80;   // vertical extent of each triangle
-let triWidth;       // horizontal extent (distance tip <-> base center)
-let palette;
-let colorPhase = 0; // optional offset you can change on click
-
-let offsetX = 0;         // horizontal scroll offset in pixels
-let scrollSpeed = 0.3;   // movement speed to the right
+let flowfield;
+let vehicles = [];
+let debug = false;
+let time = 0;
 
 function setup() {
-  createCanvas(800, 500);
-  colorMode(HSL, 360, 100, 100, 1);
-
-  // For an equilateral triangle of side triSide, its "height" is
-  // triSide * sqrt(3) / 2. When rotated, we use that as the width.
-  triWidth = triSide * sqrt(3) / 2;
-
-  // Different blue tints
-  palette = [
-    color(195, 90, 65, 0.75),  // bright sky blue
-    color(205, 80, 55, 0.75),  // medium blue
-    color(215, 75, 45, 0.75),  // deeper blue
-    color(185, 60, 70, 0.85),  // cyan-ish blue
-    color(225, 40, 35, 0.85)   // dark desaturated blue
-  ];
-
-  noStroke();
+  createCanvas(400, 400);
+  flowfield = new FlowField(15);
+  
+  // Create vehicles
+  for (let i = 0; i < 800; i++) {
+    vehicles.push(
+      new Vehicle(
+        random(width),
+        random(height),
+        // Reduced speed range for slower movement
+        random(0.5, 1.5),
+        // Reduced force so steering is gentler
+        random(0.01, 0.06)
+      )
+    );
+  }
 }
 
 function draw() {
-  // very light bluish background
-  background(195, 40, 93);
+  background(80, 80, 95);
+  
+  time += 0.01;
+  
+  // Display the flowfield in debug mode
+  if (debug) flowfield.show();
+  
+  // Check if hovering
+  const isHovering =
+    mouseX >= 0 && mouseX <= width && mouseY >= 0 && mouseY <= height;
+  
+  // Tell all vehicles to follow the flow field
+  for (let i = 0; i < vehicles.length; i++) {
+    vehicles[i].follow(flowfield);
+    
+    // Add repulsion when hovering
+    if (isHovering) {
+      vehicles[i].repel(createVector(mouseX, mouseY), 100);
+    }
+    
+    vehicles[i].run();
+  }
+}
 
-  const stepX = triWidth * 0.5; // horizontal step between columns (centers)
-  const stepY = triSide * 0.5;  // vertical step between rows
+function keyPressed() {
+  if (key == " ") {
+    debug = !debug;
+  }
+}
 
-  // We want the animation to fully repeat after the pattern moves
-  // exactly the width of 3 triangles: 3 * triWidth = 6 * stepX
-  const periodCols = 6;               // number of column steps per loop
-  const periodX = periodCols * stepX; // distance for one full loop
+function mousePressed() {
+  flowfield.init();
+}
 
-  // Scroll visually to the RIGHT by increasing offsetX.
-  // Wrap after 3 triangles so the loop is seamless.
-  offsetX += scrollSpeed;
-  if (offsetX >= periodX) {
-    offsetX -= periodX;
+// FlowField class
+class FlowField {
+  constructor(resolution) {
+    this.resolution = resolution;
+    this.cols = floor(width / resolution);
+    this.rows = floor(height / resolution);
+    this.vectors = [];
+    this.init();
   }
 
-  const extraCols = periodCols + 2;
-  const extraRows = 3;
+  init() {
+    // Wavy flow from top-right to bottom-left
+    const baseAngle = (5 * PI) / 4;
+    
+    for (let y = 0; y < this.rows; y++) {
+      for (let x = 0; x < this.cols; x++) {
+        // Create wave effect perpendicular to the main flow direction
+        const wave = sin(x * 0.3) * 0.8 + cos(y * 0.2) * 0.5;
+        const angle = baseAngle + wave;
+        this.vectors[x + y * this.cols] = createVector(cos(angle), sin(angle));
+      }
+    }
+  }
 
-  // 6-column color cycle; 6th repeats the first to match the loop period
-  const colToPalette = [0, 1, 2, 3, 4, 0];
+  lookup(lookup) {
+    let col = constrain(
+      floor(lookup.x / this.resolution),
+      0,
+      this.cols - 1
+    );
+    let row = constrain(
+      floor(lookup.y / this.resolution),
+      0,
+      this.rows - 1
+    );
+    return this.vectors[col + row * this.cols].copy();
+  }
 
-  for (let row = -extraRows; row <= height / stepY + extraRows; row++) {
-    const y = row * stepY;
-
-    // Stagger every second row for a woven / diagonal feel
-    const xOffset = (row % 2 === 0) ? 0 : stepX * 0.5;
-
-    for (let col = -extraCols; col <= width / stepX + extraCols; col++) {
-      // Color depends only on (row, col) in a 6-step cycle
-      let k = (row + col + colorPhase) % periodCols;
-      if (k < 0) k += periodCols;
-      const paletteIndex = colToPalette[k];
-      fill(palette[paletteIndex]);
-
-      // Apply scrolling to x-position (positive offsetX moves triangles right)
-      const x = col * stepX + xOffset + offsetX;
-
-      drawRightTriangle(x, y);
+  show() {
+    for (let y = 0; y < this.rows; y++) {
+      for (let x = 0; x < this.cols; x++) {
+        let index = x + y * this.cols;
+        let v = this.vectors[index];
+        stroke(100, 100, 115);
+        strokeWeight(1);
+        drawArrowLine(
+          x * this.resolution + this.resolution / 2,
+          y * this.resolution + this.resolution / 2,
+          v.x,
+          v.y,
+          5
+        );
+      }
     }
   }
 }
 
-function drawRightTriangle(cx, cy) {
-  // Right-pointing equilateral triangle centered at (cx, cy).
-  const w = triWidth;   // width (tip to base center)
-  const h = triSide;    // total vertical extent
-
-  triangle(
-    cx + w * 0.5, cy,        // right tip
-    cx - w * 0.5, cy - h / 2,  // top-left of base
-    cx - w * 0.5, cy + h / 2   // bottom-left of base
-  );
+function drawArrowLine(x, y, vx, vy, len) {
+  let angle = atan2(vy, vx);
+  stroke(100, 100, 115);
+  strokeWeight(1);
+  let fromX = x - cos(angle) * len;
+  let fromY = y - sin(angle) * len;
+  let toX = x + cos(angle) * len;
+  let toY = y + sin(angle) * len;
+  line(fromX, fromY, toX, toY);
 }
 
-function mousePressed() {
-  // Optional: shift the color phase while preserving seamless looping.
-  colorPhase = (colorPhase + 1) % 6;
+// Vehicle class
+class Vehicle {
+  constructor(x, y, maxSpeed, maxForce) {
+    this.position = createVector(x, y);
+    this.velocity = createVector(0, 0);
+    this.acceleration = createVector(0, 0);
+    this.maxSpeed = maxSpeed;
+    this.maxForce = maxForce;
+    this.size = 14;
+    this.hue = 270 + random(-20, 20);
+  }
+
+  applyForce(force) {
+    this.acceleration.add(force);
+  }
+
+  follow(flowField) {
+    let desired = flowField.lookup(this.position);
+    desired.mult(this.maxSpeed);
+    
+    let steer = p5.Vector.sub(desired, this.velocity);
+    steer.limit(this.maxForce);
+    this.applyForce(steer);
+  }
+
+  repel(target, radius) {
+    let distance = p5.Vector.dist(this.position, target);
+    
+    if (distance < radius) {
+      // Create repel force
+      let away = p5.Vector.sub(this.position, target);
+      away.normalize();
+      
+      // Stronger the closer to mouse
+      let strength = (radius - distance) / radius;
+      away.mult(this.maxForce * strength * 2);
+      
+      this.applyForce(away);
+    }
+  }
+
+  run() {
+    this.update();
+    this.display();
+  }
+
+  update() {
+    this.velocity.add(this.acceleration);
+    this.velocity.limit(this.maxSpeed);
+    this.position.add(this.velocity);
+    this.acceleration.mult(0);
+    
+    // Wraparound
+    if (this.position.x < 0) this.position.x = width;
+    if (this.position.x > width) this.position.x = 0;
+    if (this.position.y < 0) this.position.y = height;
+    if (this.position.y > height) this.position.y = 0;
+  }
+
+  display() {
+    fill(hslToRgb(this.hue, 25, 50));
+    noStroke();
+    
+    // Draw as colored triangle
+    this.drawTriangle(this.position.x, this.position.y, this.size);
+  }
+
+  drawTriangle(x, y, size) {
+    const h = size * 0.866;
+    
+    push();
+    translate(x, y);
+    
+    // If you want them to point in the direction of motion, uncomment:
+    // let angle = this.velocity.heading();
+    // rotate(angle + PI / 2);
+    
+    // Upward pointing triangle
+    triangle(
+      0, -h / 2,
+      -size / 2, h / 2,
+      size / 2, h / 2
+    );
+    
+    pop();
+  }
+}
+
+function hslToRgb(h, s, l) {
+  h = h / 360;
+  s = s / 100;
+  l = l / 100;
+  
+  let r, g, b;
+  
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+    
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    
+    r = hue2rgb(p, q, h + 1/3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1/3);
+  }
+  
+  return color(r * 255, g * 255, b * 255);
 }
