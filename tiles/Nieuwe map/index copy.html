@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <title>HvA Driehoeken – PS4 Simulatie</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0f0f19; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.3/p5.min.js"></script>
+<script>
+new p5(function(p) {
+
+  // HvA kleurenpalet (wit, rood, geel, donkerblauw, paars, grijs)
+  const COLORS = [
+    [255, 255, 255],
+    [190, 30,  45],
+    [255, 200,  0],
+    [20,  30, 100],
+    [100, 55, 115],
+    [170, 170, 175],
+  ];
+
+  const NUM = 28;
+  let triangles = [];
+
+  class Tri {
+    constructor(init) {
+      this.spawn(init);
+    }
+
+    spawn(init) {
+      this.x = init ? p.random(-60, p.width + 60) : -70;
+      this.y = p.random(-50, p.height + 50);
+
+      const r = p.random();
+      if      (r < 0.30) this.baseSize = p.random(7, 16);
+      else if (r < 0.70) this.baseSize = p.random(18, 48);
+      else               this.baseSize = p.random(52, 105);
+
+      this.hoverScale = 1.0;
+      this.size       = this.baseSize;
+
+      const c = p.random(COLORS);
+      this.col = p.color(c[0], c[1], c[2], p.random(130, 220));
+
+      // Drift: voornamelijk naar rechts, licht schuin
+      const ang  = p.random(-0.28, 0.28);
+      const spd  = p.random(0.15, 0.65);
+      this.vx = Math.cos(ang) * spd;
+      this.vy = Math.sin(ang) * spd;
+
+      this.rot     = p.random(p.TWO_PI);
+      this.rotSpd  = p.random(-0.004, 0.004);
+      this.hovered = false;
+    }
+
+    update() {
+      this.x   += this.vx;
+      this.y   += this.vy;
+      this.rot += this.rotSpd;
+
+      const target = this.hovered ? 2.4 : 1.0;
+      this.hoverScale += (target - this.hoverScale) * 0.09;
+      this.size = this.baseSize * this.hoverScale;
+
+      if (this.x > p.width + 130 || this.y > p.height + 130 || this.y < -130) {
+        this.spawn(false);
+      }
+    }
+
+    checkHover(mx, my) {
+      this.hovered = p.dist(mx, my, this.x, this.y) < this.size * 1.15;
+    }
+
+    draw() {
+      p.push();
+      p.translate(this.x, this.y);
+      p.rotate(this.rot);
+      p.noStroke();
+      p.fill(this.col);
+      const s = this.size;
+      // Play-button driehoek (wijst naar rechts)
+      p.triangle(
+        -s * 0.62, -s * 0.62,
+        -s * 0.62,  s * 0.62,
+         s * 0.78,  0
+      );
+      p.pop();
+    }
+  }
+
+  p.setup = function() {
+    p.createCanvas(500, 500);
+    for (let i = 0; i < NUM; i++) triangles.push(new Tri(true));
+  };
+
+  p.draw = function() {
+    // Donkere achtergrond met zachte trail (PS4-stijl)
+    p.fill(15, 15, 25, 28);
+    p.noStroke();
+    p.rect(0, 0, p.width, p.height);
+
+    const mx = p.mouseX;
+    const my = p.mouseY;
+
+    for (const t of triangles) {
+      t.checkHover(mx, my);
+      t.update();
+      t.draw();
+    }
+  };
+
+});
+</script>
+</body>
+</html>
