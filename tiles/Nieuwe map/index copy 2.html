@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Riso Ink Swirl</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #180608;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+<script>
+const CANVAS_W = 1920;
+const CANVAS_H = 1080;
+
+// Tweak these for density and motion.
+const RIBBON_COUNT = 8;        // 6-10 keeps it light.
+const POINTS_PER_RIBBON = 16;  // 10-20 per ribbon.
+const SWIRL_RADIUS = 280;      // Cursor influence radius.
+const SWIRL_STRENGTH = 92;     // Higher = stronger stirring.
+
+let ribbons = [];
+let grainLayer;
+let fitScale = 1;
+let offsetX = 0;
+let offsetY = 0;
+
+function setup() {
+  createCanvas(CANVAS_W, CANVAS_H);
+  pixelDensity(1);
+  noCursor();
+
+  createRibbons();
+  createGrainTexture();
+  resizeCanvasDisplay();
+}
+
+function windowResized() {
+  resizeCanvasDisplay();
+}
+
+function draw() {
+  background(112, 9, 19);
+
+  push();
+  scale(1);
+
+  for (let ribbon of ribbons) {
+    ribbon.update();
+    ribbon.draw();
+  }
+
+  blendMode(MULTIPLY);
+  image(grainLayer, 0, 0);
+  blendMode(BLEND);
+
+  drawCursorHint();
+
+  pop();
+}
+
+function resizeCanvasDisplay() {
+  fitScale = min(windowWidth / CANVAS_W, windowHeight / CANVAS_H);
+  const displayW = floor(CANVAS_W * fitScale);
+  const displayH = floor(CANVAS_H * fitScale);
+
+  const c = document.querySelector("canvas");
+  c.style.width = displayW + "px";
+  c.style.height = displayH + "px";
+
+  offsetX = (windowWidth - displayW) * 0.5;
+  offsetY = (windowHeight - displayH) * 0.5;
+}
+
+function scaledMouse() {
+  return {
+    x: mouseX,
+    y: mouseY,
+    inside: mouseX >= 0 && mouseX <= CANVAS_W && mouseY >= 0 && mouseY <= CANVAS_H
+  };
+}
+
+function createRibbons() {
+  ribbons = [];
+
+  for (let i = 0; i < RIBBON_COUNT; i++) {
+    const points = [];
+    const yBase = map(i, 0, RIBBON_COUNT - 1, -160, CANVAS_H + 160);
+    const phase = random(TWO_PI);
+    const amp = random(120, 280);
+    const waveFreq = random(1.2, 2.4);
+    const thickness = random(74, 138);
+
+    for (let j = 0; j < POINTS_PER_RIBBON; j++) {
+      const t = j / (POINTS_PER_RIBBON - 1);
+      const x = lerp(-240, CANVAS_W + 240, t);
+      const drift = sin(t * TWO_PI * waveFreq + phase) * amp;
+      const curl = sin(t * TWO_PI * (waveFreq * 0.55) + phase * 1.7) * amp * 0.55;
+      const y = yBase + drift + curl;
+
+      points.push({
+        baseX: x,
+        baseY: y,
+        x,
+        y,
+        seed: random(1000)
+      });
+    }
+
+    ribbons.push(new Ribbon(points, thickness, random(1000)));
+  }
+
+  // Add a couple of tall looping ribbons for the spiral feeling.
+  ribbons.push(makeLoopRibbon(410, 590, 310, 124, 0.25));
+  ribbons.push(makeLoopRibbon(1370, 470, 360, 108, 1.55));
+}
+
+function makeLoopRibbon(cx, cy, radius, thickness, phase) {
+  const points = [];
+
+  for (let i = 0; i < POINTS_PER_RIBBON + 4; i++) {
+    const t = i / (POINTS_PER_RIBBON + 3);
+    const a = phase + t * TWO_PI * 1.35;
+    const r = radius * (1.05 - t * 0.55);
+    const x = cx + cos(a) * r * 1.3;
+    const y = cy + sin(a) * r * 0.85;
+
+    points.push({
+      baseX: x,
+      baseY: y,
+      x,
+      y,
+      seed: random(1000)
+    });
+  }
+
+  return new Ribbon(points, thickness, random(1000));
+}
+
+class Ribbon {
+  constructor(points, thickness, seed) {
+    this.points = points;
+    this.thickness = thickness;
+    this.seed = seed;
+  }
+
+  update() {
+    const m = scaledMouse();
+    const time = frameCount * 0.008;
+
+    for (let p of this.points) {
+      const n1 = noise(p.seed, time);
+      const n2 = noise(p.seed + 80.0, time);
+      let x = p.baseX + map(n1, 0, 1, -28, 28);
+      let y = p.baseY + map(n2, 0, 1, -34, 34);
+
+      if (m.inside) {
+        const dx = x - m.x;
+        const dy = y - m.y;
+        const d = sqrt(dx * dx + dy * dy);
+
+        if (d < SWIRL_RADIUS && d > 0.001) {
+          const falloff = pow(1 - d / SWIRL_RADIUS, 1.7);
+          const anglePulse = sin(frameCount * 0.04 + d * 0.025) * 0.5 + 0.5;
+          const force = SWIRL_STRENGTH * falloff * (0.65 + anglePulse);
+
+          const nx = -dy / d;
+          const ny = dx / d;
+
+          x += nx * force;
+          y += ny * force;
+
+          // Small inward pull makes the ink feel stirred instead of only pushed.
+          x -= (dx / d) * force * 0.22;
+          y -= (dy / d) * force * 0.22;
+        }
+      }
+
+      p.x = lerp(p.x, x, 0.24);
+      p.y = lerp(p.y, y, 0.24);
+    }
+  }
+
+  draw() {
+    noFill();
+
+    // Soft outer ink edge.
+    for (let i = 5; i >= 1; i--) {
+      stroke(8, 10, 13, 12);
+      strokeWeight(this.thickness + i * 18);
+      drawSmoothPath(this.points);
+    }
+
+    // Dense black body.
+    stroke(4, 5, 7, 210);
+    strokeWeight(this.thickness);
+    drawSmoothPath(this.points);
+
+    // Slight darker core for richer riso ink.
+    stroke(0, 0, 0, 95);
+    strokeWeight(this.thickness * 0.55);
+    drawSmoothPath(this.points);
+  }
+}
+
+function drawSmoothPath(points) {
+  beginShape();
+  curveVertex(points[0].x, points[0].y);
+
+  for (let p of points) {
+    curveVertex(p.x, p.y);
+  }
+
+  const last = points[points.length - 1];
+  curveVertex(last.x, last.y);
+  endShape();
+}
+
+function createGrainTexture() {
+  grainLayer = createGraphics(CANVAS_W, CANVAS_H);
+  grainLayer.pixelDensity(1);
+  grainLayer.clear();
+
+  // Texture controls: lower step = denser grain, higher alpha = stronger print noise.
+  const step = 4;
+
+  grainLayer.noStroke();
+
+  for (let y = 0; y < CANVAS_H; y += step) {
+    for (let x = 0; x < CANVAS_W; x += step) {
+      const r = random();
+
+      if (r < 0.56) {
+        grainLayer.fill(15, 4, 5, random(18, 58));
+      } else if (r < 0.86) {
+        grainLayer.fill(150, 10, 18, random(14, 42));
+      } else {
+        grainLayer.fill(0, 0, 0, random(35, 85));
+      }
+
+      const s = random(1, 3.8);
+      grainLayer.rect(x + random(-1, 1), y + random(-1, 1), s, s);
+    }
+  }
+
+  // A second sparse pass gives larger uneven riso speckles.
+  for (let i = 0; i < 24000; i++) {
+    const x = random(CANVAS_W);
+    const y = random(CANVAS_H);
+    const s = random(1.2, 3.5);
+    grainLayer.fill(0, 0, 0, random(18, 58));
+    grainLayer.ellipse(x, y, s, s);
+  }
+}
+
+function drawCursorHint() {
+  if (mouseX < 0 || mouseX > CANVAS_W || mouseY < 0 || mouseY > CANVAS_H) return;
+
+  noFill();
+  stroke(255, 60, 70, 42);
+  strokeWeight(2);
+  circle(mouseX, mouseY, 18);
+
+  stroke(0, 0, 0, 36);
+  strokeWeight(1);
+  circle(mouseX, mouseY, SWIRL_RADIUS * 2);
+}
+</script>
+</body>
+</html>
