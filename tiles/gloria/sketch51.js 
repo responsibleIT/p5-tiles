@@ -1,0 +1,248 @@
+const CANVAS_W = 1080;
+const CANVAS_H = 920;
+
+const COLS = 34;
+const ROWS = 30;
+const CELL_W = CANVAS_W / COLS;
+const CELL_H = CANVAS_H / ROWS;
+
+const BG_A = "#17110d";
+const BG_B = "#2a1d14";
+const INK = "#0b0806";
+const ESPRESSO = "#21150e";
+const CHESTNUT = "#5b3823";
+const CARAMEL = "#a77743";
+const SAND = "#d0b279";
+const MUTED_GOLD = "#b8904d";
+
+let tiles = [];
+let palette = {};
+let easedMouseX = 540;
+let easedMouseY = 460;
+
+function setup() {
+  createCanvas(CANVAS_W, CANVAS_H);
+  pixelDensity(1);
+  noStroke();
+  colorMode(RGB, 255, 255, 255, 255);
+
+  palette = {
+    bgA: color(BG_A),
+    bgB: color(BG_B),
+    ink: color(INK),
+    espresso: color(ESPRESSO),
+    chestnut: color(CHESTNUT),
+    caramel: color(CARAMEL),
+    sand: color(SAND),
+    gold: color(MUTED_GOLD)
+  };
+
+  buildTessellation();
+}
+
+function draw() {
+  const t = frameCount * 0.012;
+
+  easedMouseX = lerp(easedMouseX, mouseX, 0.035);
+  easedMouseY = lerp(easedMouseY, mouseY, 0.035);
+
+  drawTriangleBackground(t);
+
+  for (let tile of tiles) {
+    tile.draw(t);
+  }
+}
+
+function buildTessellation() {
+  tiles = [];
+
+  for (let row = -2; row < ROWS + 2; row++) {
+    for (let col = -2; col < COLS + 2; col++) {
+      const stagger = row % 2 === 0 ? 0 : CELL_W * 0.5;
+      const x = col * CELL_W + stagger;
+      const y = row * CELL_H;
+
+      const n = noise(col * 0.13, row * 0.13);
+      const lean = map(noise(col * 0.23 + 40, row * 0.2), 0, 1, -0.26, 0.26);
+      const lift = map(noise(col * 0.18, row * 0.18 + 90), 0, 1, -0.22, 0.22);
+
+      const p0 = createVector(
+        x + CELL_W * noise(col + 1.7, row + 8.2) * 0.22,
+        y + CELL_H * noise(col + 4.1, row + 2.9) * 0.22
+      );
+
+      const p1 = createVector(
+        x + CELL_W * (1 + lean + noise(col + 3.2, row + 5.4) * 0.16),
+        y + CELL_H * noise(col + 9.7, row + 1.5) * 0.2
+      );
+
+      const p2 = createVector(
+        x + CELL_W * (1 + noise(col + 6.4, row + 3.3) * 0.18),
+        y + CELL_H * (1 + lift + noise(col + 2.6, row + 7.7) * 0.18)
+      );
+
+      const p3 = createVector(
+        x + CELL_W * (lean * 0.42 + noise(col + 8.8, row + 4.6) * 0.18),
+        y + CELL_H * (1 + noise(col + 5.5, row + 6.1) * 0.2)
+      );
+
+      const center = createVector(
+        x + CELL_W * (0.5 + map(noise(col * 0.4, row * 0.33), 0, 1, -0.16, 0.16)),
+        y + CELL_H * (0.5 + map(noise(col * 0.28 + 11, row * 0.35), 0, 1, -0.16, 0.16))
+      );
+
+      tiles.push(new TextileTriangle(p0, p1, center, col, row, n, 0));
+      tiles.push(new TextileTriangle(p1, p2, center, col, row, n, 1));
+      tiles.push(new TextileTriangle(p2, p3, center, col, row, n, 2));
+      tiles.push(new TextileTriangle(p3, p0, center, col, row, n, 3));
+    }
+  }
+}
+
+class TextileTriangle {
+  constructor(a, b, c, col, row, n, side) {
+    this.a = a;
+    this.b = b;
+    this.c = c;
+    this.col = col;
+    this.row = row;
+    this.side = side;
+
+    this.cx = (a.x + b.x + c.x) / 3;
+    this.cy = (a.y + b.y + c.y) / 3;
+
+    this.noiseBase = noise(col * 0.11, row * 0.11);
+    this.ribbon = zebraRibbon(this.cx, this.cy);
+    this.spot = leopardSpot(this.cx, this.cy);
+    this.thread = noise(this.cx * 0.018, this.cy * 0.018);
+    this.phase = noise(col * 0.31 + side * 2, row * 0.27) * TWO_PI;
+  }
+
+  draw(t) {
+    const breathe = sin(t + this.phase) * 0.018;
+    const slowTone = noise(this.col * 0.08, this.row * 0.08, t * 0.08);
+
+    const d = dist(easedMouseX, easedMouseY, this.cx, this.cy);
+    const mouseLight = smooth01(1 - d / 190) * 0.07;
+
+    const zebra = smoothBand(this.ribbon, 0.39, 0.23);
+    const spot = smoothBand(this.spot, 0.52, 0.2);
+    const printMix = constrain(zebra * 0.72 + spot * 0.55, 0, 1);
+
+    let base = lerpColor(palette.bgA, palette.bgB, noise(this.cx * 0.005, this.cy * 0.006));
+    let warm = lerpColor(palette.chestnut, palette.caramel, smooth01(this.thread + breathe));
+    let light = lerpColor(palette.sand, palette.gold, slowTone);
+    let dark = lerpColor(palette.ink, palette.espresso, this.noiseBase);
+
+    let textile = lerpColor(base, warm, 0.58);
+    textile = lerpColor(textile, light, smooth01(1 - printMix) * 0.42);
+    textile = lerpColor(textile, dark, printMix * 0.86);
+
+    const weaveA = noise(this.cx * 0.09, this.cy * 0.012);
+    const weaveB = noise(this.cx * 0.014, this.cy * 0.085);
+    const weave = (weaveA + weaveB) * 0.5;
+
+    textile = lerpColor(textile, palette.gold, smooth01(weave - 0.44) * 0.18);
+    textile = brighten(textile, mouseLight + breathe * 0.35);
+
+    noStroke();
+    fill(textile);
+    triangle(this.a.x, this.a.y, this.b.x, this.b.y, this.c.x, this.c.y);
+
+    drawInsetThreads(this.a, this.b, this.c, textile, printMix, weave);
+  }
+}
+
+function drawTriangleBackground(t) {
+  for (let y = -CELL_H; y < height + CELL_H; y += CELL_H) {
+    for (let x = -CELL_W; x < width + CELL_W; x += CELL_W) {
+      const n = noise(x * 0.006, y * 0.006, t * 0.04);
+      const c = lerpColor(palette.bgA, palette.bgB, n);
+      fill(c);
+
+      const x1 = x;
+      const y1 = y;
+      const x2 = x + CELL_W;
+      const y2 = y + noise(x * 0.02, y * 0.02) * CELL_H * 0.2;
+      const x3 = x + CELL_W * 0.5;
+      const y3 = y + CELL_H;
+
+      triangle(x1, y1, x2, y2, x3, y3);
+
+      const c2 = lerpColor(palette.bgB, palette.espresso, noise(x * 0.007 + 20, y * 0.007));
+      fill(c2);
+      triangle(x + CELL_W, y, x + CELL_W, y + CELL_H, x + CELL_W * 0.5, y + CELL_H);
+    }
+  }
+}
+
+function drawInsetThreads(a, b, c, baseColor, printMix, weave) {
+  const center = createVector(
+    (a.x + b.x + c.x) / 3,
+    (a.y + b.y + c.y) / 3
+  );
+
+  const inset1 = 0.18;
+  const inset2 = 0.34;
+
+  const a1 = lerpPoint(a, center, inset1);
+  const b1 = lerpPoint(b, center, inset1);
+  const c1 = lerpPoint(c, center, inset1);
+
+  const a2 = lerpPoint(a, center, inset2);
+  const b2 = lerpPoint(b, center, inset2);
+  const c2 = lerpPoint(c, center, inset2);
+
+  const threadAlpha = map(weave, 0, 1, 10, 28);
+  const shadeAlpha = map(printMix, 0, 1, 8, 20);
+
+  fill(withAlpha(brighten(baseColor, 0.08), threadAlpha));
+  triangle(a1.x, a1.y, b1.x, b1.y, c1.x, c1.y);
+
+  fill(withAlpha(palette.ink, shadeAlpha));
+  triangle(a2.x, a2.y, b2.x, b2.y, c2.x, c2.y);
+}
+
+function zebraRibbon(x, y) {
+  const flow = x * 0.012 + sin(y * 0.018) * 1.8 + noise(x * 0.004, y * 0.006) * 4.8;
+  return abs(sin(flow));
+}
+
+function leopardSpot(x, y) {
+  const nx = x * 0.010;
+  const ny = y * 0.012;
+  const cellular = noise(nx, ny) * 0.62 + noise(nx * 2.1 + 70, ny * 2.1) * 0.38;
+  const ring = abs(cellular - 0.52);
+  return 1 - smooth01(ring * 3.4);
+}
+
+function smoothBand(value, center, width) {
+  const d = abs(value - center);
+  return 1 - smooth01(d / width);
+}
+
+function smooth01(v) {
+  const x = constrain(v, 0, 1);
+  return x * x * (3 - 2 * x);
+}
+
+function lerpPoint(p, q, amt) {
+  return createVector(
+    lerp(p.x, q.x, amt),
+    lerp(p.y, q.y, amt)
+  );
+}
+
+function brighten(c, amount) {
+  const a = constrain(amount, -0.25, 0.25);
+  return color(
+    constrain(red(c) + 255 * a, 0, 255),
+    constrain(green(c) + 220 * a, 0, 255),
+    constrain(blue(c) + 170 * a, 0, 255),
+    alpha(c)
+  );
+}
+
+function withAlpha(c, a) {
+  return color(red(c), green(c), blue(c), a);
+}

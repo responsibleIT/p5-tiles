@@ -1,0 +1,115 @@
+new p5(function(p) {
+
+  const W = 1080, H = 920;
+  let mx, my, targetMx, targetMy;
+  let t = 0;
+  let cols = 28, rows = 24;
+  let grid = [], particles = [];
+
+  const palette = [
+    [255, 60,  120],
+    [255, 140,  30],
+    [255, 220,  50],
+    [ 50, 220, 180],
+    [ 60, 120, 255],
+    [180,  50, 255],
+    [255,  80, 200],
+  ];
+
+  p.setup = function () {
+    p.createCanvas(W, H);
+    p.colorMode(p.RGB, 255, 255, 255, 255);
+    mx = W / 2; my = H / 2;
+    targetMx = W / 2; targetMy = H / 2;
+
+    for (var i = 0; i < cols; i++) {
+      grid[i] = [];
+      for (var j = 0; j < rows; j++) {
+        grid[i][j] = { angle: 0 };
+      }
+    }
+
+    for (var k = 0; k < 1800; k++) {
+      particles.push(spawnParticle());
+    }
+  };
+
+  function spawnParticle() {
+    var colIdx = Math.floor(Math.random() * palette.length);
+    return {
+      x: Math.random() * W,
+      y: Math.random() * H,
+      px: 0, py: 0,
+      speed: 0.4 + Math.random() * 0.9,
+      col: palette[colIdx],
+      alpha: 60 + Math.random() * 140,
+      size: 1.8 + Math.random() * 3.5,
+      life: Math.floor(Math.random() * 180),
+      maxLife: 180 + Math.floor(Math.random() * 260),
+    };
+  }
+
+  p.mouseMoved = function () {
+    targetMx = p.mouseX;
+    targetMy = p.mouseY;
+  };
+
+  p.draw = function () {
+    t += 0.003;
+
+    mx += (targetMx - mx) * 0.05;
+    my += (targetMy - my) * 0.05;
+
+    p.fill(8, 4, 20, 18);
+    p.noStroke();
+    p.rect(0, 0, W, H);
+
+    var cellW = W / cols;
+    var cellH = H / rows;
+
+    for (var i = 0; i < cols; i++) {
+      for (var j = 0; j < rows; j++) {
+        var nx = i * 0.12 + t * 0.7;
+        var ny = j * 0.12 + t * 0.5;
+        var wx = (i * cellW - mx) / W;
+        var wy = (j * cellH - my) / H;
+        var dist = Math.sqrt(wx * wx + wy * wy);
+        var vortex = Math.atan2(wy, wx) + (1.5 / (dist + 0.3));
+        grid[i][j].angle = p.noise(nx, ny) * p.TWO_PI * 2.5 + vortex * 0.6;
+      }
+    }
+
+    for (var k = 0; k < particles.length; k++) {
+      var par = particles[k];
+      par.px = par.x;
+      par.py = par.y;
+
+      var gi = Math.floor(p.constrain(par.x / cellW, 0, cols - 1));
+      var gj = Math.floor(p.constrain(par.y / cellH, 0, rows - 1));
+      par.x += Math.cos(grid[gi][gj].angle) * par.speed;
+      par.y += Math.sin(grid[gi][gj].angle) * par.speed;
+      par.life++;
+
+      var lifeRatio = par.life / par.maxLife;
+      var fade = lifeRatio < 0.1
+        ? p.map(lifeRatio, 0, 0.1, 0, 1)
+        : lifeRatio > 0.8
+        ? p.map(lifeRatio, 0.8, 1.0, 1, 0)
+        : 1;
+
+      p.stroke(par.col[0], par.col[1], par.col[2], par.alpha * fade);
+      p.strokeWeight(par.size);
+      p.line(par.px, par.py, par.x, par.y);
+
+      if (par.life > par.maxLife || par.x < 0 || par.x > W || par.y < 0 || par.y > H) {
+        particles[k] = spawnParticle();
+      }
+    }
+
+    p.noStroke();
+    for (var sl = 0; sl < H; sl += 4) {
+      p.fill(0, 0, 0, 12);
+      p.rect(0, sl, W, 2);
+    }
+  };
+});

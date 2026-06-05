@@ -1,0 +1,306 @@
+new p5(function(p) {
+
+    const W = 1080, H = 920;
+    let mx, my, targetMx, targetMy;
+    let t = 0;
+    let layers = [];
+  
+    // --- Palette ---
+    // Each color: [r, g, b]
+    const COL = {
+      skyDeep:    [ 20,  45,  18],
+      skyMid:     [ 30,  60,  22],
+      fogHaze:    [110, 140,  60],
+      sunBeam:    [200, 220,  80],
+      bgLeaf:     [ 18,  55,  20],
+      midDark:    [ 15,  70,  25],
+      midMid:     [ 25,  95,  35],
+      midLight:   [ 45, 120,  40],
+      fgDark:     [  8,  35,  12],
+      fgMid:      [ 12,  55,  18],
+      fgLight:    [ 20,  80,  28],
+      moss:       [ 38,  72,  22],
+      yellowGreen:[ 90, 140,  30],
+      sunSpot:    [180, 210,  60],
+      shadow:     [  4,  18,   6],
+    };
+  
+    function lerpCol(a, b, n) {
+      return [
+        a[0] + (b[0] - a[0]) * n,
+        a[1] + (b[1] - a[1]) * n,
+        a[2] + (b[2] - a[2]) * n,
+      ];
+    }
+  
+    // Build a triangle tile
+    function makeTri(cx, cy, r, angle, col, alpha, layer, phase, mouseStr, lag, rotSpeed, swayAmp) {
+      return {
+        cx, cy, r, angle,
+        baseAngle: angle,
+        col, alpha,
+        layer, phase,
+        mouseStr, lag,
+        rotSpeed, swayAmp,
+        ox: 0, oy: 0,
+      };
+    }
+  
+    // Get 3 points of a triangle
+    function triPts(cx, cy, r, angle) {
+      var pts = [];
+      for (var i = 0; i < 3; i++) {
+        var a = angle + (i * p.TWO_PI / 3) - p.HALF_PI;
+        pts.push(cx + r * p.cos(a), cy + r * p.sin(a));
+      }
+      return pts;
+    }
+  
+    p.setup = function () {
+      p.createCanvas(W, H);
+      p.colorMode(p.RGB, 255, 255, 255, 255);
+      mx = W / 2; my = H / 2;
+      targetMx = W / 2; targetMy = H / 2;
+      buildScene();
+    };
+  
+    function buildScene() {
+      layers = [];
+  
+      // ── LAYER 0: Background sky / deep canopy haze ──
+      // Dense small triangles filling the upper portion
+      for (var row = 0; row < 14; row++) {
+        for (var col = 0; col < 22; col++) {
+          var cx = col * 52 + (row % 2) * 26 + p.random(-8, 8);
+          var cy = row * 38 + p.random(-6, 6);
+          var n = p.noise(col * 0.18, row * 0.18);
+          var r = 22 + n * 14;
+  
+          // Sky gradient: top = dark, lower = foggy green
+          var skyT = p.constrain(cy / (H * 0.45), 0, 1);
+          var col0 = lerpCol(COL.skyDeep, COL.fogHaze, skyT);
+  
+          // Sunbeam patches — noise-driven bright spots
+          var beamN = p.noise(col * 0.25 + 10, row * 0.25 + 10);
+          if (beamN > 0.68) {
+            col0 = lerpCol(col0, COL.sunBeam, (beamN - 0.68) * 3.0);
+          }
+  
+          var alpha = 200 + n * 55;
+          var angle = p.noise(col * 0.3, row * 0.3) * p.TWO_PI;
+  
+          layers.push(makeTri(cx, cy, r, angle, col0, alpha, 0,
+            col * 0.4 + row * 0.3,
+            0, 0.0, 0.003, 0.8));
+        }
+      }
+  
+      // ── LAYER 1: Mid background foliage ──
+      for (var row = 0; row < 18; row++) {
+        for (var col = 0; col < 20; col++) {
+          var cx = col * 58 + (row % 2) * 29 + p.random(-12, 12);
+          var cy = H * 0.12 + row * 46 + p.random(-8, 8);
+          var n = p.noise(col * 0.15 + 5, row * 0.15 + 5);
+          var r = 26 + n * 18;
+  
+          var depthT = p.constrain((cy - H * 0.1) / (H * 0.7), 0, 1);
+          var col1 = lerpCol(COL.bgLeaf, COL.midMid, depthT);
+  
+          // Occasional bright leaf highlight
+          var leafN = p.noise(col * 0.22 + 20, row * 0.22 + 20);
+          if (leafN > 0.65) col1 = lerpCol(col1, COL.midLight, (leafN - 0.65) * 2.5);
+          if (leafN > 0.78) col1 = lerpCol(col1, COL.yellowGreen, (leafN - 0.78) * 4.0);
+  
+          var alpha = 180 + n * 60;
+          var angle = p.noise(col * 0.28 + 3, row * 0.28 + 3) * p.TWO_PI;
+  
+          layers.push(makeTri(cx, cy, r, angle, col1, alpha, 1,
+            col * 0.35 + row * 0.28,
+            2.5, 0.018, 0.004, 1.2));
+        }
+      }
+  
+      // ── LAYER 2: Mid foliage — denser, larger ──
+      for (var row = 0; row < 14; row++) {
+        for (var col = 0; col < 16; col++) {
+          var cx = col * 72 + (row % 2) * 36 + p.random(-15, 15);
+          var cy = H * 0.25 + row * 56 + p.random(-10, 10);
+          var n = p.noise(col * 0.12 + 15, row * 0.12 + 15);
+          var r = 34 + n * 24;
+  
+          var depthT = p.constrain((cy - H * 0.2) / (H * 0.6), 0, 1);
+          var col2 = lerpCol(COL.midDark, COL.midMid, depthT);
+  
+          var leafN = p.noise(col * 0.2 + 30, row * 0.2 + 30);
+          if (leafN > 0.60) col2 = lerpCol(col2, COL.midLight, (leafN - 0.60) * 2.0);
+          if (leafN > 0.72) col2 = lerpCol(col2, COL.sunSpot, (leafN - 0.72) * 3.5);
+  
+          var alpha = 200 + n * 50;
+          var angle = p.noise(col * 0.25 + 7, row * 0.25 + 7) * p.TWO_PI;
+  
+          layers.push(makeTri(cx, cy, r, angle, col2, alpha, 2,
+            col * 0.3 + row * 0.25,
+            4, 0.022, 0.005, 1.8));
+        }
+      }
+  
+      // ── LAYER 3: Sunbeam shafts — tall thin bright triangles ──
+      var beamPositions = [
+        W * 0.12, W * 0.27, W * 0.44, W * 0.58, W * 0.73, W * 0.88
+      ];
+      beamPositions.forEach(function(bx, bi) {
+        var beamH = H * (0.4 + p.random(0.2));
+        var beamW = 28 + p.random(30);
+        var steps = 12;
+        for (var s = 0; s < steps; s++) {
+          var by = H * 0.05 + (beamH / steps) * s;
+          var fade = 1 - s / steps;
+          var jitter = p.random(-beamW * 0.3, beamW * 0.3);
+          var col3 = lerpCol(COL.fogHaze, COL.sunBeam, fade * 0.7);
+          var alpha = fade * 55 + 15;
+          layers.push(makeTri(
+            bx + jitter, by,
+            beamW * (0.6 + fade * 0.8),
+            -p.HALF_PI + p.random(-0.15, 0.15),
+            col3, alpha, 3,
+            bi * 0.6 + s * 0.2,
+            1.5, 0.012, 0.002, 0.5
+          ));
+        }
+      });
+  
+      // ── LAYER 4: Foreground foliage — large, dark, sharp ──
+      for (var row = 0; row < 10; row++) {
+        for (var col = 0; col < 14; col++) {
+          var cx = col * 84 + (row % 2) * 42 + p.random(-18, 18);
+          var cy = H * 0.45 + row * 58 + p.random(-12, 12);
+          var n = p.noise(col * 0.1 + 40, row * 0.1 + 40);
+          var r = 42 + n * 32;
+  
+          var depthT = p.constrain((cy - H * 0.4) / (H * 0.5), 0, 1);
+          var col4 = lerpCol(COL.fgMid, COL.fgDark, depthT);
+  
+          var leafN = p.noise(col * 0.18 + 45, row * 0.18 + 45);
+          if (leafN > 0.62) col4 = lerpCol(col4, COL.fgLight, (leafN - 0.62) * 2.2);
+          if (leafN > 0.75) col4 = lerpCol(col4, COL.moss, (leafN - 0.75) * 3.0);
+  
+          var alpha = 220 + n * 35;
+          var angle = p.noise(col * 0.22 + 9, row * 0.22 + 9) * p.TWO_PI;
+  
+          layers.push(makeTri(cx, cy, r, angle, col4, alpha, 4,
+            col * 0.28 + row * 0.22,
+            6, 0.028, 0.006, 2.2));
+        }
+      }
+  
+      // ── LAYER 5: Foreground edge — very large, very dark ──
+      for (var col = 0; col < 20; col++) {
+        var cx = col * 58 + p.random(-10, 10);
+        var n = p.noise(col * 0.14 + 60, 60);
+        var r = 55 + n * 45;
+        var cy = H - r * 0.6 + p.random(-15, 15);
+        var col5 = lerpCol(COL.shadow, COL.fgDark, n);
+        var alpha = 230 + n * 25;
+        var angle = p.noise(col * 0.2 + 11, 11) * p.TWO_PI;
+  
+        layers.push(makeTri(cx, cy, r, angle, col5, alpha, 5,
+          col * 0.25,
+          8, 0.032, 0.007, 2.8));
+      }
+  
+      // Sort back to front
+      layers.sort(function(a, b) { return a.layer - b.layer; });
+    }
+  
+    p.mouseMoved = function () {
+      targetMx = p.mouseX;
+      targetMy = p.mouseY;
+    };
+  
+    p.draw = function () {
+      t += 0.006;
+  
+      mx += (targetMx - mx) * 0.04;
+      my += (targetMy - my) * 0.04;
+  
+      // Deep jungle background fill
+      p.background(COL.skyDeep[0], COL.skyDeep[1], COL.skyDeep[2]);
+  
+      var mdx = (mx - W / 2) / W;
+      var mdy = (my - H / 2) / H;
+  
+      for (var i = 0; i < layers.length; i++) {
+        var tri = layers[i];
+  
+        // Distance from mouse
+        var dx = tri.cx - mx;
+        var dy = tri.cy - my;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        var proximity = Math.max(0, 1 - dist / 260);
+        var softProx = proximity * proximity; // ease falloff
+  
+        // Wind: gentle push away from cursor
+        var windX = softProx * (dx / (dist + 1)) * 14;
+        var windY = softProx * (dy / (dist + 1)) * 10;
+  
+        tri.ox += (windX - tri.ox) * tri.lag;
+        tri.oy += (windY - tri.oy) * tri.lag;
+  
+        // Perlin sway — each triangle breathes independently
+        var swayX = p.noise(tri.cx * 0.004, tri.cy * 0.004, t * 0.4 + tri.phase) - 0.5;
+        var swayY = p.noise(tri.cx * 0.004 + 100, tri.cy * 0.004 + 100, t * 0.35 + tri.phase) - 0.5;
+        swayX *= tri.swayAmp * 2.0;
+        swayY *= tri.swayAmp * 1.4;
+  
+        var fx = tri.cx + tri.ox + swayX;
+        var fy = tri.cy + tri.oy + swayY;
+  
+        // Rotation: slow base + tiny wind boost near cursor
+        var rotWind = softProx * 0.018;
+        var angle = tri.baseAngle
+          + t * tri.rotSpeed
+          + (p.noise(tri.phase * 0.5, t * 0.3) - 0.5) * 0.18
+          + rotWind;
+  
+        var fr = tri.r * (1 + softProx * 0.04);
+  
+        var pts = triPts(fx, fy, fr, angle);
+  
+        // Subtle color brightening near cursor
+        var c = tri.col;
+        var bright = softProx * 22;
+        p.fill(
+          p.constrain(c[0] + bright, 0, 255),
+          p.constrain(c[1] + bright * 1.2, 0, 255),
+          p.constrain(c[2] + bright * 0.4, 0, 255),
+          tri.alpha
+        );
+        p.noStroke();
+        p.triangle(pts[0], pts[1], pts[2], pts[3], pts[4], pts[5]);
+  
+        // Inner highlight — offset smaller triangle for depth
+        if (tri.layer >= 2 && tri.r > 28) {
+          var hpts = triPts(fx, fy, fr * 0.42, angle + 0.28);
+          p.fill(
+            p.constrain(c[0] + 35, 0, 255),
+            p.constrain(c[1] + 28, 0, 255),
+            p.constrain(c[2] + 8, 0, 255),
+            tri.alpha * 0.35
+          );
+          p.triangle(hpts[0], hpts[1], hpts[2], hpts[3], hpts[4], hpts[5]);
+        }
+      }
+  
+      // Atmospheric fog overlay — top and bottom
+      for (var fy2 = 0; fy2 < H; fy2 += 3) {
+        var topFog = p.map(fy2, 0, H * 0.18, 28, 0);
+        var botFog = p.map(fy2, H * 0.82, H, 0, 35);
+        var fog = p.constrain(topFog + botFog, 0, 40);
+        if (fog > 0) {
+          p.fill(COL.fogHaze[0], COL.fogHaze[1], COL.fogHaze[2], fog * 0.5);
+          p.noStroke();
+          p.triangle(0, fy2, W, fy2, W, fy2 + 3);
+        }
+      }
+    };
+  });

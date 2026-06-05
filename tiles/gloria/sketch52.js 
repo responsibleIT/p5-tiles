@@ -1,0 +1,252 @@
+const CANVAS_W = 1080;
+const CANVAS_H = 920;
+
+const COLS = 38;
+const ROWS = 32;
+const CELL_W = CANVAS_W / COLS;
+const CELL_H = CANVAS_H / ROWS;
+
+const BREATH_SPEED = 0.018;
+const MOUSE_RADIUS = 210;
+
+let pieces = [];
+let fabricColors = {};
+let smoothMouseX = CANVAS_W / 2;
+let smoothMouseY = CANVAS_H / 2;
+
+function setup() {
+  createCanvas(CANVAS_W, CANVAS_H);
+  pixelDensity(1);
+  colorMode(RGB, 255, 255, 255, 255);
+  noStroke();
+
+  fabricColors = {
+    black: color(10, 7, 5),
+    deepBrown: color(31, 20, 13),
+    warmBrown: color(74, 46, 28),
+    chestnut: color(110, 70, 39),
+    caramel: color(166, 114, 63),
+    sand: color(210, 181, 127),
+    mutedGold: color(181, 143, 76),
+    silkLight: color(229, 206, 158)
+  };
+
+  noiseSeed(41);
+  buildPattern();
+}
+
+function draw() {
+  const t = frameCount * BREATH_SPEED;
+
+  smoothMouseX = lerp(smoothMouseX, mouseX, 0.04);
+  smoothMouseY = lerp(smoothMouseY, mouseY, 0.04);
+
+  drawSilkBase(t);
+
+  for (let p of pieces) {
+    p.draw(t);
+  }
+}
+
+function buildPattern() {
+  pieces = [];
+
+  for (let y = -2; y < ROWS + 2; y++) {
+    for (let x = -2; x < COLS + 2; x++) {
+      const offset = y % 2 === 0 ? 0 : CELL_W * 0.5;
+      const bx = x * CELL_W + offset;
+      const by = y * CELL_H;
+
+      const organic = noise(x * 0.2, y * 0.2);
+      const slant = map(noise(x * 0.17 + 12, y * 0.21), 0, 1, -0.22, 0.22);
+      const lift = map(noise(x * 0.19, y * 0.15 + 30), 0, 1, -0.18, 0.18);
+
+      const p0 = createVector(
+        bx + CELL_W * map(noise(x + 0.2, y + 2.4), 0, 1, -0.08, 0.13),
+        by + CELL_H * map(noise(x + 8.2, y + 1.1), 0, 1, -0.07, 0.13)
+      );
+
+      const p1 = createVector(
+        bx + CELL_W * (1.0 + slant + map(noise(x + 5.3, y + 4.2), 0, 1, -0.08, 0.1)),
+        by + CELL_H * map(noise(x + 2.3, y + 7.8), 0, 1, -0.08, 0.12)
+      );
+
+      const p2 = createVector(
+        bx + CELL_W * (1.0 + map(noise(x + 6.7, y + 0.4), 0, 1, -0.07, 0.1)),
+        by + CELL_H * (1.0 + lift + map(noise(x + 1.9, y + 5.5), 0, 1, -0.08, 0.12))
+      );
+
+      const p3 = createVector(
+        bx + CELL_W * (slant * 0.34 + map(noise(x + 7.7, y + 3.1), 0, 1, -0.09, 0.12)),
+        by + CELL_H * (1.0 + map(noise(x + 4.4, y + 6.6), 0, 1, -0.08, 0.12))
+      );
+
+      const center = createVector(
+        bx + CELL_W * (0.5 + map(noise(x * 0.42 + 20, y * 0.39), 0, 1, -0.13, 0.13)),
+        by + CELL_H * (0.5 + map(noise(x * 0.36, y * 0.42 + 22), 0, 1, -0.13, 0.13))
+      );
+
+      pieces.push(new FabricTriangle(p0, p1, center, x, y, 0, organic));
+      pieces.push(new FabricTriangle(p1, p2, center, x, y, 1, organic));
+      pieces.push(new FabricTriangle(p2, p3, center, x, y, 2, organic));
+      pieces.push(new FabricTriangle(p3, p0, center, x, y, 3, organic));
+    }
+  }
+}
+
+class FabricTriangle {
+  constructor(a, b, c, gx, gy, side, organic) {
+    this.a = a;
+    this.b = b;
+    this.c = c;
+    this.gx = gx;
+    this.gy = gy;
+    this.side = side;
+    this.organic = organic;
+
+    this.cx = (a.x + b.x + c.x) / 3;
+    this.cy = (a.y + b.y + c.y) / 3;
+
+    this.phase = noise(gx * 0.31 + side * 8, gy * 0.27) * TWO_PI;
+    this.thread = noise(this.cx * 0.024, this.cy * 0.024);
+    this.print = animalPrintValue(this.cx, this.cy);
+    this.edge = noise(this.cx * 0.04 + 90, this.cy * 0.04);
+  }
+
+  draw(t) {
+    const breath = sin(t + this.phase) * 0.025;
+    const softMotion = noise(this.gx * 0.08, this.gy * 0.08, t * 0.08);
+
+    const mouseD = dist(smoothMouseX, smoothMouseY, this.cx, this.cy);
+    const mouseGlow = smoothStep(1 - mouseD / MOUSE_RADIUS) * 0.08;
+
+    const ribbon = zebraValue(this.cx, this.cy, t);
+    const spot = leopardValue(this.cx, this.cy, t);
+    const printStrength = constrain(ribbon * 0.62 + spot * 0.7, 0, 1);
+
+    let base = lerpColor(fabricColors.deepBrown, fabricColors.warmBrown, smoothStep(this.organic));
+    let warmth = lerpColor(fabricColors.chestnut, fabricColors.caramel, smoothStep(this.thread + breath));
+    let silk = lerpColor(fabricColors.sand, fabricColors.mutedGold, smoothStep(softMotion));
+
+    let finalColor = lerpColor(base, warmth, 0.58);
+    finalColor = lerpColor(finalColor, silk, smoothStep(1 - printStrength) * 0.5);
+    finalColor = lerpColor(finalColor, fabricColors.black, printStrength * 0.82);
+
+    const woven = wovenValue(this.cx, this.cy);
+    finalColor = lerpColor(finalColor, fabricColors.silkLight, woven * 0.13);
+    finalColor = liftColor(finalColor, mouseGlow + breath * 0.22);
+
+    fill(finalColor);
+    triangle(this.a.x, this.a.y, this.b.x, this.b.y, this.c.x, this.c.y);
+
+    this.drawInnerFacets(finalColor, printStrength, woven, t);
+  }
+
+  drawInnerFacets(baseColor, printStrength, woven, t) {
+    const center = createVector(this.cx, this.cy);
+
+    const a1 = pointToward(this.a, center, 0.18);
+    const b1 = pointToward(this.b, center, 0.18);
+    const c1 = pointToward(this.c, center, 0.18);
+
+    const a2 = pointToward(this.a, center, 0.38);
+    const b2 = pointToward(this.b, center, 0.38);
+    const c2 = pointToward(this.c, center, 0.38);
+
+    const highlight = withAlpha(liftColor(baseColor, 0.07), 18 + woven * 24);
+    const shadow = withAlpha(fabricColors.black, 8 + printStrength * 28);
+
+    fill(highlight);
+    triangle(a1.x, a1.y, b1.x, b1.y, c1.x, c1.y);
+
+    fill(shadow);
+    triangle(a2.x, a2.y, b2.x, b2.y, c2.x, c2.y);
+
+    const tiny = 0.56 + sin(t + this.phase) * 0.015;
+    const a3 = pointToward(this.a, center, tiny);
+    const b3 = pointToward(this.b, center, tiny);
+    const c3 = pointToward(this.c, center, tiny);
+
+    fill(withAlpha(fabricColors.mutedGold, 5 + woven * 18));
+    triangle(a3.x, a3.y, b3.x, b3.y, c3.x, c3.y);
+  }
+}
+
+function drawSilkBase(t) {
+  for (let y = -CELL_H; y < height + CELL_H; y += CELL_H) {
+    for (let x = -CELL_W; x < width + CELL_W; x += CELL_W) {
+      const n1 = noise(x * 0.005, y * 0.006, t * 0.03);
+      const n2 = noise(x * 0.012 + 50, y * 0.01 + 30, t * 0.02);
+
+      const c1 = lerpColor(fabricColors.black, fabricColors.deepBrown, 0.72 + n1 * 0.24);
+      const c2 = lerpColor(fabricColors.deepBrown, fabricColors.chestnut, 0.22 + n2 * 0.24);
+
+      fill(c1);
+      triangle(x, y, x + CELL_W, y, x, y + CELL_H);
+
+      fill(c2);
+      triangle(x + CELL_W, y, x + CELL_W, y + CELL_H, x, y + CELL_H);
+    }
+  }
+}
+
+function animalPrintValue(x, y) {
+  return constrain(zebraValue(x, y, 0) * 0.55 + leopardValue(x, y, 0) * 0.65, 0, 1);
+}
+
+function zebraValue(x, y, t) {
+  const flow =
+    x * 0.011 +
+    sin(y * 0.019 + noise(x * 0.003, y * 0.004) * 3.0) * 1.7 +
+    noise(x * 0.005, y * 0.007, t * 0.02) * 2.4;
+
+  const wave = abs(sin(flow));
+  return 1 - smoothStep(abs(wave - 0.34) / 0.23);
+}
+
+function leopardValue(x, y, t) {
+  const nx = x * 0.012;
+  const ny = y * 0.012;
+
+  const cloud =
+    noise(nx, ny, t * 0.015) * 0.58 +
+    noise(nx * 2.2 + 18, ny * 2.2 + 9, t * 0.01) * 0.42;
+
+  const ring = abs(cloud - 0.53);
+  const outer = 1 - smoothStep(ring / 0.22);
+  const inner = 1 - smoothStep(abs(cloud - 0.5) / 0.08);
+
+  return constrain(outer - inner * 0.45, 0, 1);
+}
+
+function wovenValue(x, y) {
+  const horizontal = noise(x * 0.12, y * 0.012);
+  const vertical = noise(x * 0.012, y * 0.12);
+  return smoothStep((horizontal + vertical) * 0.5 - 0.35);
+}
+
+function pointToward(p, target, amount) {
+  return createVector(
+    lerp(p.x, target.x, amount),
+    lerp(p.y, target.y, amount)
+  );
+}
+
+function smoothStep(v) {
+  const x = constrain(v, 0, 1);
+  return x * x * (3 - 2 * x);
+}
+
+function liftColor(c, amount) {
+  const a = constrain(amount, -0.18, 0.18);
+  return color(
+    constrain(red(c) + 210 * a, 0, 255),
+    constrain(green(c) + 185 * a, 0, 255),
+    constrain(blue(c) + 135 * a, 0, 255),
+    alpha(c)
+  );
+}
+
+function withAlpha(c, a) {
+  return color(red(c), green(c), blue(c), constrain(a, 0, 255));
+}

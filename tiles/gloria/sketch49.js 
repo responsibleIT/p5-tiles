@@ -1,0 +1,259 @@
+new p5(function(p) {
+
+  const W = 1080, H = 920;
+  let mx, my, targetMx, targetMy;
+  let t = 0;
+  let tiles = [];
+
+  // Leopard / iridescent palette
+  const BG       = [18, 10, 5];
+  const SPOT     = [20, 12, 4];
+  const RING     = [180, 110, 20];
+  const RING2    = [220, 160, 40];
+  const SHINE    = [255, 220, 100];
+  const DARK     = [10, 6, 2];
+  const IRID = [
+    [255, 180,  30],
+    [255, 120,  10],
+    [200,  80,   0],
+    [255, 210,  80],
+    [240, 140,  20],
+    [160,  60,   0],
+    [255, 240, 160],
+  ];
+
+  // Each "spot" is a cluster of triangles forming a leopard rosette
+  function makeRosette(cx, cy, size, angleOff) {
+    var tris = [];
+    var ringCount = 5;
+
+    // Center dark spot — filled with small dark triangles
+    for (var k = 0; k < 6; k++) {
+      var a = angleOff + k * (Math.PI * 2 / 6);
+      var r = size * 0.22;
+      tris.push({
+        cx: cx + Math.cos(a) * r * 0.4,
+        cy: cy + Math.sin(a) * r * 0.4,
+        r: size * 0.18,
+        angle: a,
+        baseAngle: a,
+        col: SPOT,
+        layer: 0,
+        ox: 0, oy: 0,
+        phase: k * 0.5 + angleOff,
+        mouseStr: 8,
+        lag: 0.08,
+        rotSpeed: 0.004,
+      });
+    }
+
+    // Ring of gold triangles around spot
+    for (var k = 0; k < 8; k++) {
+      var a = angleOff + k * (Math.PI * 2 / 8);
+      var r = size * 0.52;
+      tris.push({
+        cx: cx + Math.cos(a) * r,
+        cy: cy + Math.sin(a) * r,
+        r: size * 0.28,
+        angle: a + Math.PI / 8,
+        baseAngle: a + Math.PI / 8,
+        col: IRID[k % IRID.length],
+        layer: 1,
+        ox: 0, oy: 0,
+        phase: k * 0.4 + angleOff,
+        mouseStr: 18,
+        lag: 0.055,
+        rotSpeed: 0.006,
+      });
+    }
+
+    // Outer dark border triangles
+    for (var k = 0; k < 10; k++) {
+      var a = angleOff + k * (Math.PI * 2 / 10);
+      var r = size * 0.88;
+      tris.push({
+        cx: cx + Math.cos(a) * r,
+        cy: cy + Math.sin(a) * r,
+        r: size * 0.22,
+        angle: a,
+        baseAngle: a,
+        col: DARK,
+        layer: 2,
+        ox: 0, oy: 0,
+        phase: k * 0.3 + angleOff,
+        mouseStr: 28,
+        lag: 0.04,
+        rotSpeed: -0.005,
+      });
+    }
+
+    // Shine highlight triangles
+    for (var k = 0; k < 4; k++) {
+      var a = angleOff + k * (Math.PI * 2 / 4) + 0.3;
+      var r = size * 0.35;
+      tris.push({
+        cx: cx + Math.cos(a) * r,
+        cy: cy + Math.sin(a) * r,
+        r: size * 0.12,
+        angle: a + 0.5,
+        baseAngle: a + 0.5,
+        col: SHINE,
+        layer: 3,
+        ox: 0, oy: 0,
+        phase: k * 0.9 + angleOff,
+        mouseStr: 12,
+        lag: 0.07,
+        rotSpeed: 0.009,
+      });
+    }
+
+    return tris;
+  }
+
+  p.setup = function () {
+    p.createCanvas(W, H);
+    p.colorMode(p.RGB, 255, 255, 255, 255);
+    mx = W / 2; my = H / 2;
+    targetMx = W / 2; targetMy = H / 2;
+
+    // Tile rosettes across the canvas in a staggered grid
+    var cols = 6;
+    var rows = 5;
+    var spacingX = W / (cols - 0.5);
+    var spacingY = H / (rows - 0.5);
+
+    for (var row = 0; row < rows; row++) {
+      for (var col = 0; col < cols; col++) {
+        var offsetX = (row % 2 === 0) ? 0 : spacingX * 0.5;
+        var cx = col * spacingX + offsetX + spacingX * 0.1;
+        var cy = row * spacingY + spacingY * 0.1;
+        var size = 70 + Math.random() * 30;
+        var angleOff = Math.random() * Math.PI * 2;
+        var tris = makeRosette(cx, cy, size, angleOff);
+        tiles = tiles.concat(tris);
+      }
+    }
+
+    // Sort by layer so dark borders draw on top
+    tiles.sort(function(a, b) { return a.layer - b.layer; });
+  };
+
+  p.mouseMoved = function () {
+    targetMx = p.mouseX;
+    targetMy = p.mouseY;
+  };
+
+  function drawTri(cx, cy, r, angle, col, alpha) {
+    var pts = [];
+    for (var i = 0; i < 3; i++) {
+      var a = angle + (i * p.TWO_PI / 3) - p.HALF_PI;
+      pts.push({ x: cx + r * p.cos(a), y: cy + r * p.sin(a) });
+    }
+
+    // Main fill
+    p.fill(col[0], col[1], col[2], alpha);
+    p.noStroke();
+    p.beginShape();
+    for (var k = 0; k < pts.length; k++) p.vertex(pts[k].x, pts[k].y);
+    p.endShape(p.CLOSE);
+
+    // Inner highlight face
+    var hpts = [];
+    for (var i = 0; i < 3; i++) {
+      var a = angle + (i * p.TWO_PI / 3) - p.HALF_PI + 0.25;
+      hpts.push({ x: cx + r * 0.45 * p.cos(a), y: cy + r * 0.45 * p.sin(a) });
+    }
+    p.fill(
+      Math.min(255, col[0] + 60),
+      Math.min(255, col[1] + 40),
+      Math.min(255, col[2] + 10),
+      alpha * 0.45
+    );
+    p.beginShape();
+    for (var k = 0; k < hpts.length; k++) p.vertex(hpts[k].x, hpts[k].y);
+    p.endShape(p.CLOSE);
+
+    // Sharp dark outline
+    p.noFill();
+    p.stroke(0, 0, 0, alpha * 0.5);
+    p.strokeWeight(0.8);
+    p.beginShape();
+    for (var k = 0; k < pts.length; k++) p.vertex(pts[k].x, pts[k].y);
+    p.endShape(p.CLOSE);
+  }
+
+  p.draw = function () {
+    t += 0.008;
+
+    mx += (targetMx - mx) * 0.06;
+    my += (targetMy - my) * 0.06;
+
+    // Rich warm dark background
+    p.background(BG[0], BG[1], BG[2]);
+
+    // Subtle warm vignette
+    for (var r = 900; r > 0; r -= 25) {
+      var a = p.map(r, 0, 900, 22, 0);
+      p.noStroke();
+      p.fill(80, 40, 5, a);
+      p.ellipse(W / 2, H / 2, r * 1.8, r * 1.5);
+    }
+
+    var mdx = (mx - W / 2) / W;
+    var mdy = (my - H / 2) / H;
+
+    for (var i = 0; i < tiles.length; i++) {
+      var tri = tiles[i];
+
+      // Mouse proximity — closer = more displacement
+      var dx = tri.cx - mx;
+      var dy = tri.cy - my;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      var proximity = Math.max(0, 1 - dist / 320);
+
+      // Ripple outward from mouse
+      var ripple = proximity * 22 * Math.sin(t * 4 - dist * 0.018);
+
+      tri.ox += (mdx * tri.mouseStr + (dx / (dist + 1)) * ripple - tri.ox) * tri.lag;
+      tri.oy += (mdy * tri.mouseStr + (dy / (dist + 1)) * ripple - tri.oy) * tri.lag;
+
+      // Organic breathing drift
+      var breathe = 1 + Math.sin(t * 1.2 + tri.phase) * 0.06 * proximity;
+      var driftX = Math.cos(t * 0.5 + tri.phase) * 2.5;
+      var driftY = Math.sin(t * 0.4 + tri.phase * 1.2) * 2.5;
+
+      var fx = tri.cx + tri.ox + driftX;
+      var fy = tri.cy + tri.oy + driftY;
+      var fr = tri.r * breathe;
+
+      // Rotation speeds up near mouse
+      var rotBoost = proximity * 0.03;
+      var angle = tri.baseAngle + t * (tri.rotSpeed + rotBoost) + Math.sin(t * 0.8 + tri.phase) * 0.12;
+
+      // Alpha pulses slightly near mouse
+      var alpha = 220 + proximity * 35;
+
+      // Iridescent color shift near mouse
+      var col = tri.col;
+      if (tri.layer === 1 && proximity > 0.1) {
+        var shift = Math.floor((t * 3 + tri.phase) % IRID.length);
+        col = IRID[shift];
+      }
+
+      drawTri(fx, fy, fr, angle, col, alpha);
+    }
+
+    // Film grain
+    p.loadPixels();
+    for (var n = 0; n < 7000; n++) {
+      var x = p.floor(p.random(W));
+      var y = p.floor(p.random(H));
+      var idx = 4 * (y * W + x);
+      var g = p.random(35);
+      p.pixels[idx]     = p.min(255, p.pixels[idx]     + g);
+      p.pixels[idx + 1] = p.min(255, p.pixels[idx + 1] + g);
+      p.pixels[idx + 2] = p.min(255, p.pixels[idx + 2] + g);
+    }
+    p.updatePixels();
+  };
+});

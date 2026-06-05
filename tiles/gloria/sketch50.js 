@@ -1,0 +1,115 @@
+
+// p5.js — Refined Triangular Animal Print (Aesthetic Fabric Style)
+// Canvas: 1080 x 920
+// Focus: elegant animal-print textile made from triangles
+
+let spacing = 34;
+let cols, rows;
+let t = 0;
+
+function setup() {
+  createCanvas(1080, 920);
+  pixelDensity(2);
+  noStroke();
+
+  cols = floor(width / spacing) + 2;
+  rows = floor(height / spacing) + 2;
+
+  background(18, 14, 12);
+}
+
+function draw() {
+  t += 0.006;
+
+  drawBackground();
+  drawTriangleFabric();
+}
+
+function drawBackground() {
+  for (let y = 0; y < height; y++) {
+    let n = y / height;
+    let c1 = color(10, 8, 8);
+    let c2 = color(32, 24, 20);
+    stroke(lerpColor(c1, c2, n));
+    line(0, y, width, y);
+  }
+}
+
+function drawTriangleFabric() {
+  noStroke();
+
+  let mx = mouseX / width;
+  let my = mouseY / height;
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+
+      // staggered grid (removes rigidity)
+      let offsetRow = (y % 2) * spacing * 0.5;
+      let px = x * spacing + offsetRow;
+      let py = y * spacing;
+
+      // smooth animated noise (no flicker)
+      let n = noise(x * 0.10, y * 0.10, t * 0.4);
+
+      // subtle mouse influence (very controlled)
+      let influence = (1 - dist(mx, my, x / cols, y / rows));
+      influence = constrain(influence, 0, 1);
+
+      let warp = sin(t + n * 6.0) * 1.8 * influence;
+
+      push();
+      translate(px + warp, py + warp);
+
+      let s = spacing * 1.25;
+      let rot = (n - 0.5) * 0.4 + influence * 0.15;
+      rotate(rot);
+
+      // refined animal palette (leopard / zebra fashion tones)
+      let deep = color(12, 10, 10);
+      let warmDark = color(55, 38, 28);
+      let caramel = color(140, 95, 60);
+      let sand = color(210, 175, 120);
+
+      // smooth color blending instead of hard switching
+      let cA = lerpColor(deep, warmDark, smoothstep(0.2, 0.6, n));
+      let cB = lerpColor(caramel, sand, smoothstep(0.4, 0.85, n));
+      let baseCol = lerpColor(cA, cB, 0.5 + 0.5 * sin(n * 6.283));
+
+      // main triangle pair (fabric weave feel)
+      fill(baseCol);
+      triangle(0, 0, s, 0, 0, s);
+
+      fill(lerpColor(baseCol, color(0, 0, 0), 0.25));
+      triangle(s, s, s, 0, 0, s);
+
+      // secondary micro-triangles for textile richness
+      let micro = s * 0.55;
+
+      fill(lerpColor(baseCol, color(255, 255, 255), 0.08));
+      triangle(
+        micro * 0.2, micro * 0.2,
+        micro, micro * 0.1,
+        micro * 0.1, micro
+      );
+
+      // subtle stripe suggestion (zebra/leopard hybrid hint)
+      if (n > 0.52 && n < 0.58) {
+        fill(255, 18);
+        triangle(
+          0, s * 0.2,
+          s * 0.7, 0,
+          s * 0.9, s * 0.9
+        );
+      }
+
+      pop();
+    }
+  }
+}
+
+// smoothstep helper for elegant transitions
+function smoothstep(e0, e1, x) {
+  let t = constrain((x - e0) / (e1 - e0), 0, 1);
+  return t * t * (3 - 2 * t);
+}

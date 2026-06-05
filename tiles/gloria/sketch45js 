@@ -1,0 +1,155 @@
+new p5(function(p) {
+
+  const W = 1080, H = 920;
+  let mx, my, targetMx, targetMy;
+  let clusters;
+  let t = 0;
+
+  const layers = [
+    { scale: 1.00, alpha: 180, col: [80,  30, 140] },
+    { scale: 0.90, alpha: 200, col: [60,  20, 160] },
+    { scale: 0.80, alpha: 210, col: [30,  80, 180] },
+    { scale: 0.72, alpha: 220, col: [20, 160, 180] },
+    { scale: 0.64, alpha: 230, col: [60, 200, 160] },
+    { scale: 0.57, alpha: 235, col: [200,140,  40] },
+    { scale: 0.50, alpha: 240, col: [240,100,  20] },
+    { scale: 0.43, alpha: 245, col: [255,160,  30] },
+    { scale: 0.36, alpha: 250, col: [255,210,  80] },
+    { scale: 0.28, alpha: 255, col: [255,240, 180] },
+    { scale: 0.20, alpha: 255, col: [255,255, 230] },
+  ];
+
+  p.setup = function () {
+    p.createCanvas(W, H);
+    p.colorMode(p.RGB, 255, 255, 255, 255);
+    p.smooth();
+
+    mx = W / 2;
+    my = H / 2;
+    targetMx = W / 2;
+    targetMy = H / 2;
+
+    // Build clusters here so W and H are defined
+    const seeds = [
+      { cx: W * 0.18, cy: H * 0.18, baseR: 130, speed: 0.14, phase: 0.0 },
+      { cx: W * 0.75, cy: H * 0.12, baseR: 110, speed: 0.20, phase: 1.1 },
+      { cx: W * 0.90, cy: H * 0.55, baseR: 145, speed: 0.16, phase: 2.3 },
+      { cx: W * 0.65, cy: H * 0.85, baseR: 120, speed: 0.18, phase: 3.5 },
+      { cx: W * 0.20, cy: H * 0.80, baseR: 135, speed: 0.13, phase: 4.7 },
+      { cx: W * 0.08, cy: H * 0.50, baseR: 100, speed: 0.22, phase: 5.2 },
+      { cx: W * 0.45, cy: H * 0.45, baseR: 160, speed: 0.17, phase: 0.8 },
+      { cx: W * 0.38, cy: H * 0.10, baseR:  95, speed: 0.19, phase: 2.0 },
+      { cx: W * 0.92, cy: H * 0.88, baseR: 105, speed: 0.15, phase: 3.1 },
+    ];
+
+    clusters = seeds.map(function(s) {
+      return {
+        cx: s.cx,
+        cy: s.cy,
+        baseR: s.baseR,
+        speed: s.speed,
+        phase: s.phase,
+        offsets: layers.map(function(_, i) {
+          return { ox: 0, oy: 0, phase: i * 0.4 + s.phase };
+        }),
+      };
+    });
+  };
+
+  p.mouseMoved = function () {
+    targetMx = p.mouseX;
+    targetMy = p.mouseY;
+  };
+
+  function triPts(cx, cy, r, angle) {
+    var pts = [];
+    for (var i = 0; i < 3; i++) {
+      var a = angle + (i * p.TWO_PI / 3) - p.HALF_PI;
+      pts.push({ x: cx + r * p.cos(a), y: cy + r * p.sin(a) });
+    }
+    return pts;
+  }
+
+  function drawAuraTriangle(cx, cy, r, angle, col, alpha, blurSteps) {
+    p.noFill();
+    var pts = triPts(cx, cy, r, angle);
+    for (var b = blurSteps; b >= 0; b--) {
+      var spread = b * 5;
+      var a = p.map(b, blurSteps, 0, 0, alpha);
+      p.stroke(col[0], col[1], col[2], a * 0.9);
+      p.strokeWeight(spread + 2);
+      p.beginShape();
+      for (var k = 0; k < pts.length; k++) p.vertex(pts[k].x, pts[k].y);
+      p.endShape(p.CLOSE);
+    }
+  }
+
+  p.draw = function () {
+    t += 0.012;
+
+    mx += (targetMx - mx) * 0.06;
+    my += (targetMy - my) * 0.06;
+
+    p.background(55, 20, 110);
+
+    // Global bg glow
+    for (var r = 800; r > 0; r -= 30) {
+      var a = p.map(r, 0, 800, 55, 0);
+      p.noStroke();
+      p.fill(90, 30, 160, a);
+      p.ellipse(W / 2, H / 2, r * 1.8, r * 1.4);
+    }
+
+    var mdx = (mx - W / 2) / W;
+    var mdy = (my - H / 2) / H;
+
+    for (var ci = 0; ci < clusters.length; ci++) {
+      var cluster = clusters[ci];
+
+      var clusterMouseX = mdx * (30 + ci * 5);
+      var clusterMouseY = mdy * (30 + ci * 5);
+
+      var clusterDriftX = p.cos(t * 0.18 + cluster.phase) * 14;
+      var clusterDriftY = p.sin(t * 0.14 + cluster.phase * 1.2) * 14;
+
+      var baseAngle = t * cluster.speed + cluster.phase;
+
+      for (var i = 0; i < layers.length; i++) {
+        var layer = layers[i];
+        var off = cluster.offsets[i];
+
+        var strength = p.map(i, 0, layers.length - 1, 55, 6);
+        var lag = 0.04 + i * 0.012;
+
+        off.ox += (mdx * strength - off.ox) * lag;
+        off.oy += (mdy * strength - off.oy) * lag;
+
+        var drift = 10 * (1 - i / layers.length);
+        var driftX = p.cos(t * 0.7 + off.phase) * drift;
+        var driftY = p.sin(t * 0.5 + off.phase * 1.3) * drift;
+
+        var cx = cluster.cx + off.ox + driftX + clusterDriftX + clusterMouseX;
+        var cy = cluster.cy + off.oy + driftY + clusterDriftY + clusterMouseY;
+
+        var radius = cluster.baseR * layer.scale;
+        var angle = baseAngle + i * 0.08 + p.sin(t * 0.3 + off.phase) * 0.15;
+        var blurSteps = Math.round(p.map(i, 0, layers.length - 1, 12, 5));
+
+        drawAuraTriangle(cx, cy, radius, angle, layer.col, layer.alpha, blurSteps);
+      }
+    }
+
+    // Film grain
+    p.loadPixels();
+    for (var n = 0; n < 7000; n++) {
+      var x = p.floor(p.random(W));
+      var y = p.floor(p.random(H));
+      var idx = 4 * (y * W + x);
+      var g = p.random(60);
+      p.pixels[idx]     = p.min(255, p.pixels[idx]     + g);
+      p.pixels[idx + 1] = p.min(255, p.pixels[idx + 1] + g);
+      p.pixels[idx + 2] = p.min(255, p.pixels[idx + 2] + g);
+    }
+    p.updatePixels();
+  };
+});

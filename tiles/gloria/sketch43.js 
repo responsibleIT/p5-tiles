@@ -1,0 +1,145 @@
+new p5(function(p) {
+
+  const W = 1080, H = 920;
+  let mx = W / 2, my = H / 2;
+  let targetMx = W / 2, targetMy = H / 2;
+
+  const palette = [
+    [80,  30, 140],
+    [60,  20, 160],
+    [30,  80, 180],
+    [20, 160, 180],
+    [60, 200, 160],
+    [200,140,  40],
+    [240,100,  20],
+    [255,160,  30],
+    [255,210,  80],
+    [255,240, 180],
+    [255,255, 230],
+  ];
+
+  // Generate many triangles with varied sizes and random positions
+  const COUNT = 28;
+
+  const triangles = Array.from({ length: COUNT }, (_, i) => {
+    // Spread across the full canvas with some padding
+    const hx = (Math.random() - 0.5) * (W * 0.92);
+    const hy = (Math.random() - 0.5) * (H * 0.92);
+
+    // Varied sizes: mix of large, medium, small
+    const sizeRoll = Math.random();
+    const radius = sizeRoll < 0.25
+      ? 260 + Math.random() * 160   // large
+      : sizeRoll < 0.6
+      ? 120 + Math.random() * 120   // medium
+      : 50  + Math.random() * 80;   // small
+
+    // Pick color from palette, weighted toward middle colors for variety
+    const colIdx = Math.floor(Math.random() * palette.length);
+
+    return {
+      hx,
+      hy,
+      radius,
+      col: palette[colIdx],
+      alpha: 180 + Math.random() * 75,
+      baseAngle: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.025,
+      phase: Math.random() * Math.PI * 2,
+      driftAmp: 8 + Math.random() * 18,
+      driftFreqX: 0.4 + Math.random() * 0.5,
+      driftFreqY: 0.3 + Math.random() * 0.5,
+      mouseStrength: 15 + Math.random() * 55,
+      mouseLag: 0.025 + Math.random() * 0.055,
+      blurSteps: Math.floor(6 + Math.random() * 10),
+      ox: 0,
+      oy: 0,
+    };
+  });
+
+  function triPts(cx, cy, r, angle) {
+    let pts = [];
+    for (let i = 0; i < 3; i++) {
+      let a = angle + (i * p.TWO_PI / 3) - p.HALF_PI;
+      pts.push({ x: cx + r * p.cos(a), y: cy + r * p.sin(a) });
+    }
+    return pts;
+  }
+
+  function drawAuraTriangle(cx, cy, r, angle, col, alpha, blurSteps) {
+    p.noFill();
+    let pts = triPts(cx, cy, r, angle);
+    for (let b = blurSteps; b >= 0; b--) {
+      let spread = b * 5;
+      let a = p.map(b, blurSteps, 0, 0, alpha);
+      p.stroke(col[0], col[1], col[2], a * 0.9);
+      p.strokeWeight(spread + 2);
+      p.beginShape();
+      for (let pt of pts) p.vertex(pt.x, pt.y);
+      p.endShape(p.CLOSE);
+    }
+  }
+
+  let t = 0;
+
+  p.setup = function () {
+    p.createCanvas(W, H);
+    p.colorMode(p.RGB, 255, 255, 255, 255);
+    p.smooth();
+  };
+
+  p.mouseMoved = function () {
+    targetMx = p.mouseX;
+    targetMy = p.mouseY;
+  };
+
+  p.draw = function () {
+    t += 0.012;
+
+    mx += (targetMx - mx) * 0.06;
+    my += (targetMy - my) * 0.06;
+
+    p.background(55, 20, 110);
+
+    // Subtle bg glow
+    for (let r = 700; r > 0; r -= 30) {
+      let a = p.map(r, 0, 700, 50, 0);
+      p.noStroke();
+      p.fill(90, 30, 160, a);
+      p.ellipse(W / 2, H / 2, r * 1.6, r * 1.2);
+    }
+
+    let mdx = (mx - W / 2) / W;
+    let mdy = (my - H / 2) / H;
+
+    triangles.forEach((tri) => {
+      // Smooth mouse follow
+      tri.ox += (mdx * tri.mouseStrength - tri.ox) * tri.mouseLag;
+      tri.oy += (mdy * tri.mouseStrength - tri.oy) * tri.mouseLag;
+
+      // Organic drift around home
+      let driftX = p.cos(t * tri.driftFreqX + tri.phase) * tri.driftAmp;
+      let driftY = p.sin(t * tri.driftFreqY + tri.phase * 1.3) * tri.driftAmp;
+
+      let cx = W / 2 + tri.hx + tri.ox + driftX;
+      let cy = H / 2 + tri.hy + tri.oy + driftY;
+
+      let angle = tri.baseAngle + t * tri.rotSpeed + p.sin(t * 0.3 + tri.phase) * 0.18;
+
+      drawAuraTriangle(cx, cy, tri.radius, angle, tri.col, tri.alpha, tri.blurSteps);
+    });
+
+    // Film grain
+    p.loadPixels();
+    for (let i = 0; i < 6000; i++) {
+      let x = p.floor(p.random(W));
+      let y = p.floor(p.random(H));
+      let idx = 4 * (y * W + x);
+      let g = p.random(60);
+      p.pixels[idx]     = p.min(255, p.pixels[idx]     + g);
+      p.pixels[idx + 1] = p.min(255, p.pixels[idx + 1] + g);
+      p.pixels[idx + 2] = p.min(255, p.pixels[idx + 2] + g);
+    }
+    p.updatePixels();
+  };
+});

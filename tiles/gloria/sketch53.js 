@@ -1,0 +1,375 @@
+const CANVAS_W = 1080;
+const CANVAS_H = 920;
+
+const BG_COLS = 34;
+const BG_ROWS = 26;
+const MID_COLS = 26;
+const MID_ROWS = 22;
+const FORE_COLS = 18;
+const FORE_ROWS = 16;
+
+const MOUSE_RADIUS = 180;
+const WIND_STRENGTH = 0.16;
+const BREATH_SPEED = 0.012;
+
+let forestTriangles = [];
+let atmosphereTriangles = [];
+let sunlightTriangles = [];
+
+let jungleDark;
+let jungleBlack;
+let deepGreen;
+let mossGreen;
+let leafGreen;
+let sunGreen;
+let hazeGreen;
+let goldMist;
+
+let easedMouseX = CANVAS_W / 2;
+let easedMouseY = CANVAS_H / 2;
+
+function setup() {
+  createCanvas(CANVAS_W, CANVAS_H);
+  pixelDensity(1);
+  colorMode(HSB, 360, 100, 100, 100);
+  noStroke();
+
+  randomSeed(18);
+  noiseSeed(18);
+
+  jungleBlack = color(142, 80, 6, 100);
+  jungleDark = color(138, 74, 12, 100);
+  deepGreen = color(134, 70, 20, 100);
+  mossGreen = color(102, 56, 36, 100);
+  leafGreen = color(122, 64, 48, 100);
+  sunGreen = color(78, 48, 72, 100);
+  hazeGreen = color(92, 24, 78, 100);
+  goldMist = color(58, 36, 86, 100);
+
+  buildBaseCanopy();
+  buildAtmosphere();
+  buildSunlight();
+}
+
+function draw() {
+  const t = frameCount * BREATH_SPEED;
+
+  easedMouseX = lerp(easedMouseX, mouseX, 0.035);
+  easedMouseY = lerp(easedMouseY, mouseY, 0.035);
+
+  drawTriangleBackdrop(t);
+
+  for (let s of sunlightTriangles) {
+    s.draw(t);
+  }
+
+  for (let a of atmosphereTriangles) {
+    a.draw(t);
+  }
+
+  for (let f of forestTriangles) {
+    f.draw(t);
+  }
+}
+
+function buildBaseCanopy() {
+  forestTriangles = [];
+
+  addTessellatedLayer(BG_COLS, BG_ROWS, 0, 28, 72);
+  addTessellatedLayer(MID_COLS, MID_ROWS, 1, 40, 108);
+  addTessellatedLayer(FORE_COLS, FORE_ROWS, 2, 68, 170);
+
+  forestTriangles.sort((a, b) => a.depth - b.depth);
+}
+
+function addTessellatedLayer(cols, rows, depth, minSize, maxSize) {
+  const cellW = CANVAS_W / cols;
+  const cellH = CANVAS_H / rows;
+
+  for (let row = -2; row < rows + 2; row++) {
+    for (let col = -2; col < cols + 2; col++) {
+      const stagger = row % 2 === 0 ? 0 : cellW * 0.5;
+      const x = col * cellW + stagger;
+      const y = row * cellH;
+
+      const corridor = abs((x + cellW * 0.5) - width * 0.5) / (width * 0.5);
+      const vertical = constrain((y + cellH * 0.5) / height, 0, 1);
+      const sizeBoost = depth * 0.18 + vertical * 0.12 + corridor * 0.08;
+
+      const jitter = depth === 0 ? 0.22 : depth === 1 ? 0.28 : 0.34;
+      const lean = map(noise(col * 0.19 + depth * 4, row * 0.17), 0, 1, -0.26, 0.26);
+
+      const p0 = createVector(
+        x + cellW * map(noise(col + 1.2, row + depth * 9.1), 0, 1, -jitter, jitter),
+        y + cellH * map(noise(col + 6.3, row + depth * 7.7), 0, 1, -jitter, jitter)
+      );
+
+      const p1 = createVector(
+        x + cellW * (1 + lean + map(noise(col + 3.8, row + depth * 5.2), 0, 1, -jitter, jitter)),
+        y + cellH * map(noise(col + 9.4, row + depth * 8.6), 0, 1, -jitter, jitter)
+      );
+
+      const p2 = createVector(
+        x + cellW * (1 + map(noise(col + 2.6, row + depth * 2.5), 0, 1, -jitter, jitter)),
+        y + cellH * (1 + map(noise(col + 7.5, row + depth * 4.4), 0, 1, -jitter, jitter))
+      );
+
+      const p3 = createVector(
+        x + cellW * (lean * 0.4 + map(noise(col + 8.7, row + depth * 3.3), 0, 1, -jitter, jitter)),
+        y + cellH * (1 + map(noise(col + 4.2, row + depth * 6.1), 0, 1, -jitter, jitter))
+      );
+
+      const center = createVector(
+        x + cellW * (0.5 + map(noise(col * 0.34 + depth, row * 0.31), 0, 1, -0.18, 0.18)),
+        y + cellH * (0.5 + map(noise(col * 0.28, row * 0.36 + depth), 0, 1, -0.18, 0.18))
+      );
+
+      const scale = map(noise(col * 0.22, row * 0.22, depth), 0, 1, 0.82, 1.18) + sizeBoost;
+
+      forestTriangles.push(new RainforestTriangle(p0, p1, center, depth, col, row, scale, 0));
+      forestTriangles.push(new RainforestTriangle(p1, p2, center, depth, col, row, scale, 1));
+      forestTriangles.push(new RainforestTriangle(p2, p3, center, depth, col, row, scale, 2));
+      forestTriangles.push(new RainforestTriangle(p3, p0, center, depth, col, row, scale, 3));
+    }
+  }
+}
+
+function buildAtmosphere() {
+  atmosphereTriangles = [];
+
+  for (let i = 0; i < 42; i++) {
+    const y = random(60, height * 0.92);
+    const centerPull = random(-0.45, 0.45) * (1 - y / height);
+    const x = width * (0.5 + centerPull) + random(-260, 260);
+
+    atmosphereTriangles.push(new MistTriangle(
+      x,
+      y,
+      random(170, 420),
+      random(TWO_PI),
+      random([hazeGreen, mossGreen, goldMist]),
+      random(4, 12),
+      random(0.65, 1.8),
+      random(TWO_PI)
+    ));
+  }
+}
+
+function buildSunlight() {
+  sunlightTriangles = [];
+
+  for (let i = 0; i < 18; i++) {
+    const topX = width * random(0.18, 0.82);
+    const bottomX = width * 0.5 + random(-260, 260);
+    const w = random(80, 210);
+
+    sunlightTriangles.push(new BeamTriangle(
+      createVector(topX - w, -80),
+      createVector(topX + w, -80),
+      createVector(bottomX, height * random(0.58, 1.08)),
+      random(5, 13),
+      random(TWO_PI)
+    ));
+  }
+}
+
+class RainforestTriangle {
+  constructor(a, b, c, depth, col, row, scaleFactor, side) {
+    this.a = a.copy();
+    this.b = b.copy();
+    this.c = c.copy();
+
+    this.depth = depth;
+    this.col = col;
+    this.row = row;
+    this.side = side;
+    this.scaleFactor = scaleFactor;
+
+    this.cx = (a.x + b.x + c.x) / 3;
+    this.cy = (a.y + b.y + c.y) / 3;
+
+    this.phase = noise(col * 0.31 + side * 2.1, row * 0.27 + depth) * TWO_PI;
+    this.swaySeed = random(1000);
+    this.toneSeed = noise(this.cx * 0.006, this.cy * 0.006, depth * 0.35);
+    this.leafVein = noise(this.cx * 0.026 + depth * 12, this.cy * 0.026);
+    this.alpha = depth === 0 ? 58 : depth === 1 ? 74 : 92;
+  }
+
+  draw(t) {
+    const vertical = constrain(this.cy / height, 0, 1);
+    const corridor = abs(this.cx - width * 0.5) / (width * 0.5);
+    const canopyNoise = noise(this.cx * 0.005, this.cy * 0.006, t * 0.08);
+    const leafNoise = noise(this.cx * 0.018 + 40, this.cy * 0.018, t * 0.05);
+
+    const d = dist(easedMouseX, easedMouseY, this.cx, this.cy);
+    const wind = smooth01(1 - d / MOUSE_RADIUS);
+    const sway = sin(t + this.phase) * 0.025 + (noise(this.swaySeed, t * 0.14) - 0.5) * 0.04;
+    const windAngle = wind * WIND_STRENGTH * sin(atan2(this.cy - easedMouseY, this.cx - easedMouseX) + this.phase);
+
+    let base = lerpColor(jungleBlack, deepGreen, 0.35 + canopyNoise * 0.5);
+    let mid = lerpColor(deepGreen, mossGreen, smooth01(leafNoise));
+    let light = lerpColor(leafGreen, sunGreen, smooth01(1 - corridor) * 0.5 + smooth01(1 - vertical) * 0.32);
+
+    let col = lerpColor(base, mid, depth === 0 ? 0.42 : depth === 1 ? 0.56 : 0.68);
+    col = lerpColor(col, light, smooth01(this.toneSeed - 0.24) * (depth === 0 ? 0.18 : 0.34));
+    col = lerpColor(col, jungleBlack, smooth01(vertical + corridor * 0.4 - 0.76) * 0.45);
+    col = brightenHSB(col, wind * 5.5 + sin(t * 0.7 + this.phase) * 1.2);
+
+    const angle = sway + windAngle;
+    const breathe = 1 + sin(t * 0.8 + this.phase) * 0.018;
+    const shift = wind * (this.depth + 1) * 3.2;
+
+    const center = createVector(this.cx, this.cy);
+    const aa = rotateScalePoint(this.a, center, angle, breathe, shift, this.phase);
+    const bb = rotateScalePoint(this.b, center, angle, breathe, shift, this.phase);
+    const cc = rotateScalePoint(this.c, center, angle, breathe, shift, this.phase);
+
+    fill(hue(col), saturation(col), brightness(col), this.alpha);
+    triangle(aa.x, aa.y, bb.x, bb.y, cc.x, cc.y);
+
+    this.drawLeafFacet(aa, bb, cc, col, wind, t);
+  }
+
+  drawLeafFacet(a, b, c, col, wind, t) {
+    const center = createVector(
+      (a.x + b.x + c.x) / 3,
+      (a.y + b.y + c.y) / 3
+    );
+
+    const inset = this.depth === 2 ? 0.24 : 0.32;
+    const a1 = toward(a, center, inset);
+    const b1 = toward(b, center, inset);
+    const c1 = toward(c, center, inset);
+
+    const vein = smooth01(this.leafVein + sin(t + this.phase) * 0.08);
+    const highlight = brightenHSB(col, 7 + wind * 4);
+    const shadow = darkenHSB(col, 8);
+
+    if (vein > 0.48) {
+      fill(hue(highlight), saturation(highlight) * 0.9, brightness(highlight), 10 + vein * 16);
+      triangle(a1.x, a1.y, b1.x, b1.y, c1.x, c1.y);
+    } else {
+      fill(hue(shadow), saturation(shadow), brightness(shadow), 9 + (1 - vein) * 12);
+      triangle(a1.x, a1.y, b1.x, b1.y, c1.x, c1.y);
+    }
+  }
+}
+
+class MistTriangle {
+  constructor(x, y, r, angle, col, alpha, stretch, phase) {
+    this.x = x;
+    this.y = y;
+    this.r = r;
+    this.angle = angle;
+    this.col = col;
+    this.alpha = alpha;
+    this.stretch = stretch;
+    this.phase = phase;
+  }
+
+  draw(t) {
+    const driftX = sin(t * 0.45 + this.phase) * 8;
+    const driftY = noise(this.phase, t * 0.08) * 12 - 6;
+    const breathe = 1 + sin(t * 0.55 + this.phase) * 0.035;
+
+    const a = this.angle + sin(t * 0.25 + this.phase) * 0.04;
+    const p1 = polarPoint(this.x + driftX, this.y + driftY, this.r * breathe, a);
+    const p2 = polarPoint(this.x + driftX, this.y + driftY, this.r * this.stretch * breathe, a + TWO_PI / 3);
+    const p3 = polarPoint(this.x + driftX, this.y + driftY, this.r * breathe, a + TWO_PI * 2 / 3);
+
+    fill(hue(this.col), saturation(this.col), brightness(this.col), this.alpha);
+    triangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+  }
+}
+
+class BeamTriangle {
+  constructor(a, b, c, alpha, phase) {
+    this.a = a;
+    this.b = b;
+    this.c = c;
+    this.alpha = alpha;
+    this.phase = phase;
+  }
+
+  draw(t) {
+    const shimmer = 0.78 + sin(t * 0.6 + this.phase) * 0.12;
+    const c = lerpColor(hazeGreen, goldMist, shimmer);
+
+    const sway = sin(t * 0.28 + this.phase) * 16;
+    fill(hue(c), saturation(c), brightness(c), this.alpha);
+
+    triangle(
+      this.a.x + sway,
+      this.a.y,
+      this.b.x + sway * 0.45,
+      this.b.y,
+      this.c.x - sway * 0.25,
+      this.c.y
+    );
+  }
+}
+
+function drawTriangleBackdrop(t) {
+  const c1 = lerpColor(jungleBlack, jungleDark, 0.7 + sin(t * 0.2) * 0.08);
+  const c2 = lerpColor(jungleDark, deepGreen, 0.32);
+
+  fill(c1);
+  triangle(0, 0, width, 0, 0, height);
+
+  fill(c2);
+  triangle(width, 0, width, height, 0, height);
+
+  const centerLight = lerpColor(deepGreen, mossGreen, 0.5 + sin(t * 0.3) * 0.12);
+  fill(hue(centerLight), saturation(centerLight), brightness(centerLight), 38);
+  triangle(width * 0.25, 0, width * 0.75, 0, width * 0.52, height);
+
+  const floorShadow = lerpColor(jungleBlack, deepGreen, 0.22);
+  fill(hue(floorShadow), saturation(floorShadow), brightness(floorShadow), 82);
+  triangle(-80, height, width * 0.5, height * 0.58, width + 80, height);
+}
+
+function rotateScalePoint(p, center, angle, scaleAmount, shift, phase) {
+  const dx = p.x - center.x;
+  const dy = p.y - center.y;
+  const ca = cos(angle);
+  const sa = sin(angle);
+
+  return createVector(
+    center.x + (dx * ca - dy * sa) * scaleAmount + cos(phase) * shift,
+    center.y + (dx * sa + dy * ca) * scaleAmount + sin(phase) * shift
+  );
+}
+
+function polarPoint(x, y, r, a) {
+  return createVector(x + cos(a) * r, y + sin(a) * r);
+}
+
+function toward(p, target, amt) {
+  return createVector(
+    lerp(p.x, target.x, amt),
+    lerp(p.y, target.y, amt)
+  );
+}
+
+function smooth01(v) {
+  const x = constrain(v, 0, 1);
+  return x * x * (3 - 2 * x);
+}
+
+function brightenHSB(c, amount) {
+  return color(
+    hue(c),
+    constrain(saturation(c) - amount * 0.22, 0, 100),
+    constrain(brightness(c) + amount, 0, 100),
+    alpha(c)
+  );
+}
+
+function darkenHSB(c, amount) {
+  return color(
+    hue(c),
+    constrain(saturation(c) + amount * 0.15, 0, 100),
+    constrain(brightness(c) - amount, 0, 100),
+    alpha(c)
+  );
+}

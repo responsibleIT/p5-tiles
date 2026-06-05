@@ -1,0 +1,239 @@
+new p5(function(p) {
+
+  const W = 1080, H = 920;
+  let mx, my, targetMx, targetMy;
+  let rings, floaters, sparks;
+  let t = 0;
+
+  // Warm sunset + neon palette
+  const palette = [
+    [255,  40, 100],  // hot pink
+    [255,  80,  30],  // flame orange
+    [255, 180,  20],  // gold
+    [255, 230,  80],  // yellow
+    [ 20, 220, 180],  // electric teal
+    [ 40, 160, 255],  // sky blue
+    [160,  40, 255],  // violet
+    [220,  40, 200],  // magenta
+    [255, 120, 160],  // blush
+    [ 80, 255, 200],  // mint
+  ];
+
+  p.setup = function () {
+    p.createCanvas(W, H);
+    p.colorMode(p.RGB, 255, 255, 255, 255);
+    p.smooth();
+    mx = W / 2; my = H / 2;
+    targetMx = W / 2; targetMy = H / 2;
+
+    // Concentric diamond rings — each ring is a rotated square (4-sided polygon)
+    rings = [];
+    var ringCount = 7;
+    for (var r = 0; r < ringCount; r++) {
+      var col = palette[r % palette.length];
+      rings.push({
+        baseRadius: 80 + r * 95,
+        col: col,
+        rotSpeed: (r % 2 === 0 ? 1 : -1) * (0.008 + r * 0.003),
+        angle: (r * Math.PI) / ringCount,
+        phase: r * 0.7,
+        sides: r % 2 === 0 ? 3 : 4,  // alternate triangles and diamonds
+        ox: 0, oy: 0,
+        mouseStrength: 60 - r * 6,
+        lag: 0.03 + r * 0.008,
+      });
+    }
+
+    // Floating blob shapes — large soft filled polygons drifting around
+    floaters = [];
+    var floatSeeds = [
+      { x: W*0.15, y: H*0.20, r: 260, sides: 3, col: palette[0], speed: 0.009, phase: 0.0 },
+      { x: W*0.82, y: H*0.15, r: 220, sides: 4, col: palette[2], speed: 0.011, phase: 1.4 },
+      { x: W*0.88, y: H*0.75, r: 240, sides: 3, col: palette[4], speed: 0.008, phase: 2.8 },
+      { x: W*0.12, y: H*0.80, r: 230, sides: 4, col: palette[6], speed: 0.012, phase: 4.2 },
+      { x: W*0.50, y: H*0.50, r: 300, sides: 3, col: palette[7], speed: 0.007, phase: 3.1 },
+      { x: W*0.50, y: H*0.15, r: 190, sides: 4, col: palette[9], speed: 0.013, phase: 0.9 },
+      { x: W*0.50, y: H*0.85, r: 200, sides: 3, col: palette[1], speed: 0.010, phase: 5.1 },
+    ];
+
+    floatSeeds.forEach(function(s) {
+      floaters.push({
+        hx: s.x, hy: s.y,
+        radius: s.r,
+        sides: s.sides,
+        col: s.col,
+        rotSpeed: s.speed,
+        angle: s.phase,
+        phase: s.phase,
+        driftAmp: 18 + Math.random() * 20,
+        ox: 0, oy: 0,
+        mouseStrength: 20 + Math.random() * 40,
+        lag: 0.02 + Math.random() * 0.03,
+        glowLayers: 10,
+      });
+    });
+
+    // Small sharp accent sparks — tiny bright triangles scattered everywhere
+    sparks = [];
+    for (var i = 0; i < 55; i++) {
+      sparks.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: 8 + Math.random() * 28,
+        col: palette[Math.floor(Math.random() * palette.length)],
+        angle: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.04,
+        phase: Math.random() * Math.PI * 2,
+        driftAmp: 5 + Math.random() * 12,
+        ox: 0, oy: 0,
+        mouseStrength: 5 + Math.random() * 15,
+        lag: 0.05 + Math.random() * 0.06,
+      });
+    }
+  };
+
+  p.mouseMoved = function () {
+    targetMx = p.mouseX;
+    targetMy = p.mouseY;
+  };
+
+  // Draw any regular polygon with aura glow
+  function polyPts(cx, cy, r, sides, angle) {
+    var pts = [];
+    for (var i = 0; i < sides; i++) {
+      var a = angle + (i * p.TWO_PI / sides) - p.HALF_PI;
+      pts.push({ x: cx + r * p.cos(a), y: cy + r * p.sin(a) });
+    }
+    return pts;
+  }
+
+  function drawGlowPoly(cx, cy, r, sides, angle, col, alpha, layers, filled) {
+    var pts = polyPts(cx, cy, r, sides, angle);
+
+    // Outer glow rings
+    p.noFill();
+    for (var b = layers; b >= 0; b--) {
+      var spread = b * 7;
+      var a = p.map(b, layers, 0, 0, alpha * 0.6);
+      p.stroke(col[0], col[1], col[2], a);
+      p.strokeWeight(spread + 1);
+      p.beginShape();
+      for (var k = 0; k < pts.length; k++) p.vertex(pts[k].x, pts[k].y);
+      p.endShape(p.CLOSE);
+    }
+
+    // Filled core
+    if (filled) {
+      p.fill(col[0], col[1], col[2], alpha * 0.18);
+      p.noStroke();
+      p.beginShape();
+      for (var k = 0; k < pts.length; k++) p.vertex(pts[k].x, pts[k].y);
+      p.endShape(p.CLOSE);
+    }
+
+    // Sharp bright edge
+    p.noFill();
+    p.stroke(col[0], col[1], col[2], alpha);
+    p.strokeWeight(1.8);
+    p.beginShape();
+    for (var k = 0; k < pts.length; k++) p.vertex(pts[k].x, pts[k].y);
+    p.endShape(p.CLOSE);
+  }
+
+  function drawSpark(cx, cy, r, angle, col) {
+    var pts = polyPts(cx, cy, r, 3, angle);
+    p.fill(col[0], col[1], col[2], 255);
+    p.noStroke();
+    p.beginShape();
+    for (var k = 0; k < pts.length; k++) p.vertex(pts[k].x, pts[k].y);
+    p.endShape(p.CLOSE);
+    // tiny inner highlight
+    var pts2 = polyPts(cx, cy, r * 0.45, 3, angle + 0.3);
+    p.fill(255, 255, 255, 180);
+    p.beginShape();
+    for (var k = 0; k < pts2.length; k++) p.vertex(pts2[k].x, pts2[k].y);
+    p.endShape(p.CLOSE);
+  }
+
+  p.draw = function () {
+    t += 0.012;
+
+    mx += (targetMx - mx) * 0.06;
+    my += (targetMy - my) * 0.06;
+
+    // Deep dark background — almost black with a hint of indigo
+    p.background(10, 6, 28);
+
+    // Subtle radial vignette glow from center
+    for (var r = 900; r > 0; r -= 25) {
+      var a = p.map(r, 0, 900, 30, 0);
+      p.noStroke();
+      p.fill(60, 10, 100, a);
+      p.ellipse(W / 2, H / 2, r * 1.6, r * 1.3);
+    }
+
+    var mdx = (mx - W / 2) / W;
+    var mdy = (my - H / 2) / H;
+
+    // --- Draw floaters (back layer) ---
+    for (var fi = 0; fi < floaters.length; fi++) {
+      var f = floaters[fi];
+      f.ox += (mdx * f.mouseStrength - f.ox) * f.lag;
+      f.oy += (mdy * f.mouseStrength - f.oy) * f.lag;
+
+      var dx = p.cos(t * 0.4 + f.phase) * f.driftAmp;
+      var dy = p.sin(t * 0.3 + f.phase * 1.2) * f.driftAmp;
+
+      var cx = f.hx + f.ox + dx;
+      var cy = f.hy + f.oy + dy;
+      var angle = f.angle + t * f.rotSpeed;
+
+      drawGlowPoly(cx, cy, f.radius, f.sides, angle, f.col, 220, f.glowLayers, true);
+    }
+
+    // --- Draw concentric rings from center (mid layer) ---
+    for (var ri = 0; ri < rings.length; ri++) {
+      var ring = rings[ri];
+      ring.ox += (mdx * ring.mouseStrength - ring.ox) * ring.lag;
+      ring.oy += (mdy * ring.mouseStrength - ring.oy) * ring.lag;
+
+      var rdx = p.cos(t * 0.25 + ring.phase) * 8;
+      var rdy = p.sin(t * 0.20 + ring.phase) * 8;
+
+      var rcx = W / 2 + ring.ox + rdx;
+      var rcy = H / 2 + ring.oy + rdy;
+      var rAngle = ring.angle + t * ring.rotSpeed;
+
+      drawGlowPoly(rcx, rcy, ring.baseRadius, ring.sides, rAngle, ring.col, 255, 8, false);
+    }
+
+    // --- Draw sparks (front layer) ---
+    for (var si = 0; si < sparks.length; si++) {
+      var s = sparks[si];
+      s.ox += (mdx * s.mouseStrength - s.ox) * s.lag;
+      s.oy += (mdy * s.mouseStrength - s.oy) * s.lag;
+
+      var sdx = p.cos(t * 0.9 + s.phase) * s.driftAmp;
+      var sdy = p.sin(t * 0.7 + s.phase * 1.4) * s.driftAmp;
+
+      var scx = s.x + s.ox + sdx;
+      var scy = s.y + s.oy + sdy;
+      var sAngle = s.angle + t * s.rotSpeed;
+
+      drawSpark(scx, scy, s.r, sAngle, s.col);
+    }
+
+    // Film grain
+    p.loadPixels();
+    for (var n = 0; n < 8000; n++) {
+      var x = p.floor(p.random(W));
+      var y = p.floor(p.random(H));
+      var idx = 4 * (y * W + x);
+      var g = p.random(45);
+      p.pixels[idx]     = p.min(255, p.pixels[idx]     + g);
+      p.pixels[idx + 1] = p.min(255, p.pixels[idx + 1] + g);
+      p.pixels[idx + 2] = p.min(255, p.pixels[idx + 2] + g);
+    }
+    p.updatePixels();
+  };
+});
