@@ -1,0 +1,332 @@
+const CANVAS_WIDTH = 1920;
+const CANVAS_HEIGHT = 1080;
+const FRAME_INCREMENT = 0.012;
+const MOUSE_EASING = 0.06;
+const MAX_MOUSE_OFFSET = 45;
+const CLUSTER_DRIFT = 10;
+const INNER_PATTERN_ALPHA = 150;
+const OPTIONAL_GRAIN_DOTS = 1400;
+
+let smoothedMouseX;
+let smoothedMouseY;
+let targetMouseX;
+let targetMouseY;
+let clusters = [];
+let animationTime = 0;
+
+const TRIANGLE_LAYERS = [
+  { scale: 1.0, color: [22, 24, 32], alpha: 245, strokeWeight: 5, pattern: "outline" },
+  { scale: 0.9, color: [74, 38, 132], alpha: 235, strokeWeight: 4, pattern: "stripes" },
+  { scale: 0.8, color: [27, 90, 156], alpha: 235, strokeWeight: 4, pattern: "dots" },
+  { scale: 0.71, color: [15, 141, 156], alpha: 235, strokeWeight: 3, pattern: "crosshatch" },
+  { scale: 0.62, color: [42, 161, 118], alpha: 235, strokeWeight: 3, pattern: "parallel" },
+  { scale: 0.54, color: [205, 153, 55], alpha: 238, strokeWeight: 3, pattern: "dashes" },
+  { scale: 0.46, color: [220, 96, 42], alpha: 242, strokeWeight: 3, pattern: "dots" },
+  { scale: 0.38, color: [235, 164, 50], alpha: 245, strokeWeight: 2, pattern: "stripes" },
+  { scale: 0.3, color: [238, 214, 122], alpha: 248, strokeWeight: 2, pattern: "crosshatch" },
+  { scale: 0.22, color: [252, 245, 207], alpha: 255, strokeWeight: 2, pattern: "parallel" }
+];
+
+function setup() {
+  createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
+  colorMode(RGB, 255, 255, 255, 255);
+  smooth();
+
+  smoothedMouseX = CANVAS_WIDTH / 2;
+  smoothedMouseY = CANVAS_HEIGHT / 2;
+  targetMouseX = CANVAS_WIDTH / 2;
+  targetMouseY = CANVAS_HEIGHT / 2;
+
+  initializeClusters();
+}
+
+function draw() {
+  animationTime += FRAME_INCREMENT;
+
+  updateMouseInteraction();
+  drawBackground();
+  drawReferenceGuides();
+
+  for (const cluster of clusters) {
+    updateCluster(cluster);
+    drawClusterLayers(cluster);
+  }
+
+  applyOptionalGrain();
+}
+
+function mouseMoved() {
+  targetMouseX = mouseX;
+  targetMouseY = mouseY;
+}
+
+function initializeClusters() {
+  const clusterSeeds = [
+    { centerX: CANVAS_WIDTH * 0.05, centerY: CANVAS_HEIGHT * 0.05, baseRadius: 430, speed: 0.14, phase: 0.0 },
+    { centerX: CANVAS_WIDTH * 0.95, centerY: CANVAS_HEIGHT * 0.05, baseRadius: 410, speed: 0.2, phase: 1.1 },
+    { centerX: CANVAS_WIDTH * 0.05, centerY: CANVAS_HEIGHT * 0.95, baseRadius: 420, speed: 0.13, phase: 4.7 },
+    { centerX: CANVAS_WIDTH * 0.95, centerY: CANVAS_HEIGHT * 0.95, baseRadius: 405, speed: 0.15, phase: 3.1 },
+    { centerX: CANVAS_WIDTH * 0.5, centerY: CANVAS_HEIGHT * 0.02, baseRadius: 390, speed: 0.19, phase: 2.0 },
+    { centerX: CANVAS_WIDTH * 0.5, centerY: CANVAS_HEIGHT * 0.98, baseRadius: 395, speed: 0.18, phase: 3.5 },
+    { centerX: CANVAS_WIDTH * 0.02, centerY: CANVAS_HEIGHT * 0.5, baseRadius: 380, speed: 0.22, phase: 5.2 },
+    { centerX: CANVAS_WIDTH * 0.98, centerY: CANVAS_HEIGHT * 0.5, baseRadius: 400, speed: 0.16, phase: 2.3 },
+    { centerX: CANVAS_WIDTH * 0.5, centerY: CANVAS_HEIGHT * 0.5, baseRadius: 455, speed: 0.17, phase: 0.8 }
+  ];
+
+  clusters = clusterSeeds.map((seed) => ({
+    centerX: seed.centerX,
+    centerY: seed.centerY,
+    baseRadius: seed.baseRadius,
+    speed: seed.speed,
+    phase: seed.phase,
+    mouseOffsetX: 0,
+    mouseOffsetY: 0,
+    layerOffsets: TRIANGLE_LAYERS.map((_, layerIndex) => ({
+      x: 0,
+      y: 0,
+      phase: layerIndex * 0.4 + seed.phase
+    }))
+  }));
+}
+
+function updateMouseInteraction() {
+  smoothedMouseX += (targetMouseX - smoothedMouseX) * MOUSE_EASING;
+  smoothedMouseY += (targetMouseY - smoothedMouseY) * MOUSE_EASING;
+}
+
+function updateCluster(cluster) {
+  const mouseDirectionX = (smoothedMouseX - CANVAS_WIDTH / 2) / CANVAS_WIDTH;
+  const mouseDirectionY = (smoothedMouseY - CANVAS_HEIGHT / 2) / CANVAS_HEIGHT;
+
+  cluster.mouseOffsetX = mouseDirectionX * MAX_MOUSE_OFFSET;
+  cluster.mouseOffsetY = mouseDirectionY * MAX_MOUSE_OFFSET;
+}
+
+function drawBackground() {
+  background(12, 14, 20);
+
+  // Subtle hard-edged panels replace the previous soft haze and keep depth readable.
+  noStroke();
+  fill(25, 27, 36);
+  rect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  fill(18, 20, 28);
+  rect(CANVAS_WIDTH * 0.16, CANVAS_HEIGHT * 0.12, CANVAS_WIDTH * 0.68, CANVAS_HEIGHT * 0.76);
+
+  stroke(68, 72, 84, 110);
+  strokeWeight(1);
+  for (let x = 0; x <= CANVAS_WIDTH; x += 96) {
+    line(x, 0, x, CANVAS_HEIGHT);
+  }
+  for (let y = 0; y <= CANVAS_HEIGHT; y += 96) {
+    line(0, y, CANVAS_WIDTH, y);
+  }
+}
+
+function drawReferenceGuides() {
+  // Thin geometric anchors add structure that remains legible in grayscale.
+  noFill();
+  stroke(210, 215, 220, 80);
+  strokeWeight(2);
+  ellipse(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 270, 270);
+
+  stroke(210, 215, 220, 55);
+  line(CANVAS_WIDTH * 0.5, CANVAS_HEIGHT * 0.16, CANVAS_WIDTH * 0.5, CANVAS_HEIGHT * 0.84);
+  line(CANVAS_WIDTH * 0.22, CANVAS_HEIGHT * 0.5, CANVAS_WIDTH * 0.78, CANVAS_HEIGHT * 0.5);
+}
+
+function drawClusterLayers(cluster) {
+  const baseAngle = animationTime * cluster.speed + cluster.phase;
+  const clusterDriftX = cos(animationTime * 0.18 + cluster.phase) * CLUSTER_DRIFT;
+  const clusterDriftY = sin(animationTime * 0.14 + cluster.phase * 1.2) * CLUSTER_DRIFT;
+
+  for (let layerIndex = 0; layerIndex < TRIANGLE_LAYERS.length; layerIndex++) {
+    drawClusterLayer(cluster, layerIndex, baseAngle, clusterDriftX, clusterDriftY);
+  }
+}
+
+function drawClusterLayer(cluster, layerIndex, baseAngle, clusterDriftX, clusterDriftY) {
+  const layer = TRIANGLE_LAYERS[layerIndex];
+  const offset = cluster.layerOffsets[layerIndex];
+  const depthRatio = layerIndex / (TRIANGLE_LAYERS.length - 1);
+  const mouseStrength = lerp(MAX_MOUSE_OFFSET, 5, depthRatio);
+  const offsetEasing = 0.04 + layerIndex * 0.012;
+
+  const mouseDirectionX = (smoothedMouseX - CANVAS_WIDTH / 2) / CANVAS_WIDTH;
+  const mouseDirectionY = (smoothedMouseY - CANVAS_HEIGHT / 2) / CANVAS_HEIGHT;
+
+  offset.x += (mouseDirectionX * mouseStrength - offset.x) * offsetEasing;
+  offset.y += (mouseDirectionY * mouseStrength - offset.y) * offsetEasing;
+
+  const localDrift = 9 * (1 - depthRatio);
+  const localDriftX = cos(animationTime * 0.7 + offset.phase) * localDrift;
+  const localDriftY = sin(animationTime * 0.5 + offset.phase * 1.3) * localDrift;
+
+  const centerX = cluster.centerX + cluster.mouseOffsetX + offset.x + clusterDriftX + localDriftX;
+  const centerY = cluster.centerY + cluster.mouseOffsetY + offset.y + clusterDriftY + localDriftY;
+  const radius = cluster.baseRadius * layer.scale;
+  const angle = baseAngle + layerIndex * 0.08 + sin(animationTime * 0.3 + offset.phase) * 0.15;
+
+  drawSharpTriangle(centerX, centerY, radius, angle, layer, layerIndex);
+}
+
+function drawSharpTriangle(centerX, centerY, radius, angle, layer, layerIndex) {
+  const points = getTrianglePoints(centerX, centerY, radius, angle);
+
+  stroke(238, 242, 245, 220);
+  strokeWeight(layer.strokeWeight + 2);
+  fill(layer.color[0], layer.color[1], layer.color[2], layer.alpha);
+  drawClosedPolygon(points);
+
+  stroke(8, 10, 15, 240);
+  strokeWeight(layer.strokeWeight);
+  noFill();
+  drawClosedPolygon(points);
+
+  drawTrianglePattern(points, layer.pattern, layerIndex);
+}
+
+function getTrianglePoints(centerX, centerY, radius, angle) {
+  const points = [];
+
+  for (let index = 0; index < 3; index++) {
+    const pointAngle = angle + index * TWO_PI / 3 - HALF_PI;
+    points.push({
+      x: centerX + radius * cos(pointAngle),
+      y: centerY + radius * sin(pointAngle)
+    });
+  }
+
+  return points;
+}
+
+function drawClosedPolygon(points) {
+  beginShape();
+  for (const point of points) {
+    vertex(point.x, point.y);
+  }
+  endShape(CLOSE);
+}
+
+function drawTrianglePattern(points, patternName, layerIndex) {
+  const center = getPolygonCenter(points);
+  const patternAlpha = INNER_PATTERN_ALPHA - layerIndex * 6;
+
+  push();
+  drawingContext.save();
+  clipToPolygon(points);
+
+  if (patternName === "stripes") {
+    drawStripePattern(points, -PI / 5, 28, patternAlpha);
+  } else if (patternName === "dots") {
+    drawDotPattern(points, 34, patternAlpha);
+  } else if (patternName === "crosshatch") {
+    drawStripePattern(points, PI / 4, 32, patternAlpha);
+    drawStripePattern(points, -PI / 4, 32, patternAlpha * 0.75);
+  } else if (patternName === "parallel") {
+    drawStripePattern(points, 0, 26, patternAlpha);
+  } else if (patternName === "dashes") {
+    drawDashedRadialPattern(center, points, patternAlpha);
+  }
+
+  drawingContext.restore();
+  pop();
+}
+
+function clipToPolygon(points) {
+  drawingContext.beginPath();
+  drawingContext.moveTo(points[0].x, points[0].y);
+  for (let index = 1; index < points.length; index++) {
+    drawingContext.lineTo(points[index].x, points[index].y);
+  }
+  drawingContext.closePath();
+  drawingContext.clip();
+}
+
+function getPolygonCenter(points) {
+  let centerX = 0;
+  let centerY = 0;
+
+  for (const point of points) {
+    centerX += point.x;
+    centerY += point.y;
+  }
+
+  return {
+    x: centerX / points.length,
+    y: centerY / points.length
+  };
+}
+
+function getBounds(points) {
+  return {
+    left: min(points.map((point) => point.x)),
+    right: max(points.map((point) => point.x)),
+    top: min(points.map((point) => point.y)),
+    bottom: max(points.map((point) => point.y))
+  };
+}
+
+function drawStripePattern(points, angle, spacing, alphaValue) {
+  const bounds = getBounds(points);
+  const span = dist(bounds.left, bounds.top, bounds.right, bounds.bottom) + 160;
+  const centerX = (bounds.left + bounds.right) / 2;
+  const centerY = (bounds.top + bounds.bottom) / 2;
+
+  push();
+  translate(centerX, centerY);
+  rotate(angle);
+  stroke(250, 252, 245, alphaValue);
+  strokeWeight(2);
+
+  for (let offset = -span; offset <= span; offset += spacing) {
+    line(offset, -span, offset, span);
+  }
+
+  pop();
+}
+
+function drawDotPattern(points, spacing, alphaValue) {
+  const bounds = getBounds(points);
+
+  noStroke();
+  fill(252, 252, 245, alphaValue);
+
+  for (let y = bounds.top - spacing; y <= bounds.bottom + spacing; y += spacing) {
+    for (let x = bounds.left - spacing; x <= bounds.right + spacing; x += spacing) {
+      const stagger = floor(y / spacing) % 2 === 0 ? spacing * 0.5 : 0;
+      circle(x + stagger, y, 5);
+    }
+  }
+}
+
+function drawDashedRadialPattern(center, points, alphaValue) {
+  const bounds = getBounds(points);
+  const longestRadius = dist(bounds.left, bounds.top, bounds.right, bounds.bottom) * 0.5;
+
+  stroke(252, 252, 245, alphaValue);
+  strokeWeight(3);
+
+  for (let angle = 0; angle < TWO_PI; angle += PI / 9) {
+    for (let radius = 22; radius < longestRadius; radius += 42) {
+      const startX = center.x + cos(angle) * radius;
+      const startY = center.y + sin(angle) * radius;
+      const endX = center.x + cos(angle) * (radius + 20);
+      const endY = center.y + sin(angle) * (radius + 20);
+      line(startX, startY, endX, endY);
+    }
+  }
+}
+
+function applyOptionalGrain() {
+  // A sparse, crisp grain gives texture without washing out edges.
+  strokeWeight(1);
+
+  for (let index = 0; index < OPTIONAL_GRAIN_DOTS; index++) {
+    const x = floor(random(CANVAS_WIDTH));
+    const y = floor(random(CANVAS_HEIGHT));
+    const brightness = random(18, 50);
+    stroke(255, 255, 255, brightness);
+    point(x, y);
+  }
+}

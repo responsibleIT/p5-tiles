@@ -1,0 +1,351 @@
+function setup() {
+  createCanvas(1920, 1080);
+  randomSeed(4317);
+  noiseSeed(4317);
+  angleMode(DEGREES);
+  rectMode(CENTER);
+  noLoop();
+}
+
+function draw() {
+  background(5, 13, 9);
+
+  addWallTexture();
+  drawTileGrid();
+  drawGraffitiLayer();
+  drawSpikeField();
+  addHatchedDetails();
+  addSprayDrips();
+  addFinalScratches();
+}
+
+function palette() {
+  return {
+    background: color(5, 13, 9),
+    blackGreen: color(8, 20, 13),
+    deepGreen: color(18, 54, 30),
+    mossGreen: color(43, 91, 46),
+    mutedGreen: color(70, 115, 55),
+    acidGreen: color(160, 255, 41),
+    neonGreen: color(80, 235, 35),
+    paleGreen: color(222, 245, 214),
+    grayGreen: color(145, 164, 142),
+    shadow: color(2, 5, 4)
+  };
+}
+
+function addWallTexture() {
+  const c = palette();
+
+  noStroke();
+
+  for (let i = 0; i < 16000; i++) {
+    const x = random(width);
+    const y = random(height);
+    const n = noise(x * 0.006, y * 0.006);
+    const brightness = map(n, 0, 1, 8, 42);
+    fill(20, brightness, 18, random(14, 38));
+    rect(x, y, random(1, 5), random(1, 5));
+  }
+
+  for (let y = 20; y < height; y += 42) {
+    fill(red(c.blackGreen), green(c.blackGreen), blue(c.blackGreen), 38);
+    rect(width / 2, y + random(-5, 5), width, random(2, 6));
+  }
+
+  for (let x = 0; x < width; x += 96) {
+    fill(0, 0, 0, 35);
+    rect(x + random(-8, 8), height / 2, random(2, 5), height);
+  }
+}
+
+function drawTileGrid() {
+  const c = palette();
+  const colors = [
+    c.deepGreen,
+    c.mossGreen,
+    c.mutedGreen,
+    c.blackGreen,
+    c.neonGreen,
+    c.acidGreen,
+    c.paleGreen
+  ];
+
+  const cellW = 120;
+  const cellH = 108;
+
+  for (let y = -cellH; y < height + cellH; y += cellH) {
+    for (let x = -cellW; x < width + cellW; x += cellW) {
+      const jx = random(-14, 14);
+      const jy = random(-12, 12);
+      const w = cellW + random(-24, 28);
+      const h = cellH + random(-22, 24);
+      const tileColor = random(colors);
+
+      if (random() < 0.58) {
+        drawSplitTile(x + cellW / 2 + jx, y + cellH / 2 + jy, w, h, tileColor);
+      } else {
+        drawRectTile(
+          x + cellW / 2 + jx,
+          y + cellH / 2 + jy,
+          w * random(0.72, 1.08),
+          h * random(0.62, 1.05),
+          random([0, 0, 0, 90]),
+          tileColor,
+          random(1, 5)
+        );
+      }
+    }
+  }
+}
+
+function drawSplitTile(cx, cy, w, h, baseColor) {
+  const c = palette();
+  const flip = random() < 0.5;
+  const inset = random(0, 10);
+  const x1 = cx - w / 2 + inset;
+  const y1 = cy - h / 2 + inset;
+  const x2 = cx + w / 2 - inset;
+  const y2 = cy + h / 2 - inset;
+
+  const colorA = shiftGreen(baseColor, random(-18, 24));
+  const colorB = random([c.blackGreen, c.deepGreen, c.mossGreen, c.neonGreen, c.paleGreen]);
+
+  if (flip) {
+    drawTriangleTile(x1, y1, x2, y1, x1, y2, colorA, random(1, 5));
+    drawTriangleTile(x2, y1, x2, y2, x1, y2, colorB, random(1, 4));
+  } else {
+    drawTriangleTile(x1, y1, x2, y1, x2, y2, colorA, random(1, 5));
+    drawTriangleTile(x1, y1, x2, y2, x1, y2, colorB, random(1, 4));
+  }
+
+  if (random() < 0.45) {
+    drawSkinnyRect(cx, cy, w * 1.18, random(3, 8), flip ? 38 : -38, c.shadow, 115);
+  }
+}
+
+function drawGraffitiLayer() {
+  const c = palette();
+
+  drawLargeBlockCluster(290, 250, 1.18, -4);
+  drawLargeBlockCluster(760, 610, 1.35, 7);
+  drawLargeBlockCluster(1250, 320, 1.08, -6);
+  drawLargeBlockCluster(1600, 705, 1.25, 5);
+
+  drawTriangleTile(90, 875, 420, 575, 560, 990, c.acidGreen, 9);
+  drawTriangleTile(1515, 140, 1825, 420, 1340, 525, c.neonGreen, 8);
+  drawTriangleTile(820, 105, 1110, 95, 1000, 420, c.paleGreen, 7);
+  drawTriangleTile(1180, 910, 1500, 635, 1660, 995, c.mossGreen, 8);
+
+  drawRectTile(950, 540, 620, 112, -18, c.blackGreen, 7);
+  drawRectTile(1010, 558, 540, 56, -18, c.paleGreen, 3);
+  drawRectTile(975, 520, 710, 34, -18, c.shadow, 1);
+
+  drawRectTile(575, 390, 470, 86, 26, c.acidGreen, 6);
+  drawRectTile(605, 425, 380, 42, 26, c.deepGreen, 2);
+
+  drawRectTile(1420, 560, 500, 74, -32, c.neonGreen, 6);
+  drawRectTile(1390, 595, 400, 36, -32, c.shadow, 2);
+}
+
+function drawLargeBlockCluster(cx, cy, s, rot) {
+  const c = palette();
+
+  push();
+  translate(cx, cy);
+  rotate(rot);
+
+  drawRectTile(-80 * s, -30 * s, 320 * s, 150 * s, 0, c.deepGreen, 7);
+  drawRectTile(60 * s, 74 * s, 260 * s, 92 * s, 0, c.mossGreen, 5);
+  drawRectTile(12 * s, -18 * s, 120 * s, 248 * s, 0, c.shadow, 3);
+  drawRectTile(-104 * s, -72 * s, 132 * s, 44 * s, 0, c.paleGreen, 3);
+  drawRectTile(124 * s, 28 * s, 150 * s, 52 * s, 0, c.acidGreen, 4);
+
+  drawTriangleTile(-240 * s, -106 * s, -38 * s, -162 * s, -95 * s, 48 * s, c.neonGreen, 5);
+  drawTriangleTile(176 * s, -112 * s, 276 * s, 96 * s, 44 * s, 12 * s, c.blackGreen, 6);
+  drawTriangleTile(-188 * s, 102 * s, 70 * s, 154 * s, -72 * s, -10 * s, c.mutedGreen, 4);
+
+  pop();
+}
+
+function drawSpikeField() {
+  const c = palette();
+  const spikeColors = [c.acidGreen, c.neonGreen, c.paleGreen, c.deepGreen, c.shadow];
+
+  for (let i = 0; i < 42; i++) {
+    const cx = random(80, width - 80);
+    const cy = random(90, height - 90);
+    const len = random(75, 240);
+    const thickness = random(18, 58);
+    const angle = random([0, 45, 90, 135, 180, 225, 270, 315]) + random(-9, 9);
+    const fillColor = random(spikeColors);
+
+    push();
+    translate(cx, cy);
+    rotate(angle);
+
+    drawTriangleTile(-thickness, -thickness, len, 0, -thickness, thickness, fillColor, random(2, 6));
+
+    if (random() < 0.55) {
+      drawTriangleTile(-thickness * 0.4, -thickness * 0.35, len * 0.62, 0, -thickness * 0.4, thickness * 0.35, c.shadow, 1);
+    }
+
+    pop();
+  }
+}
+
+function addHatchedDetails() {
+  const c = palette();
+
+  for (let i = 0; i < 70; i++) {
+    const cx = random(width);
+    const cy = random(height);
+    const bandCount = floor(random(4, 11));
+    const angle = random([-45, -28, 28, 45, 90]);
+    const hatchColor = random([c.paleGreen, c.grayGreen, c.shadow, c.acidGreen]);
+    const alphaValue = random(65, 145);
+
+    for (let j = 0; j < bandCount; j++) {
+      const offset = (j - bandCount / 2) * random(8, 15);
+      drawSkinnyRect(
+        cx + offset * cos(angle + 90),
+        cy + offset * sin(angle + 90),
+        random(28, 118),
+        random(2, 5),
+        angle,
+        hatchColor,
+        alphaValue
+      );
+    }
+  }
+
+  for (let i = 0; i < 46; i++) {
+    const x = random(width);
+    const y = random(height);
+    drawRectTile(x, y, random(18, 52), random(18, 52), random([0, 45, 90]), random([c.paleGreen, c.shadow, c.neonGreen]), random(1, 3));
+  }
+}
+
+function addSprayDrips() {
+  const c = palette();
+
+  for (let i = 0; i < 85; i++) {
+    const x = random(width);
+    const y = random(40, height - 160);
+    const dripLength = random(18, 150);
+    const dripWidth = random(3, 12);
+    const dripColor = random([c.acidGreen, c.neonGreen, c.paleGreen, c.deepGreen, c.shadow]);
+    const alphaValue = random(75, 155);
+
+    drawSkinnyRect(x, y + dripLength / 2, dripWidth, dripLength, random(-4, 4), dripColor, alphaValue);
+
+    if (random() < 0.38) {
+      drawTriangleTile(
+        x - dripWidth * 1.8,
+        y + dripLength,
+        x + dripWidth * 1.8,
+        y + dripLength,
+        x,
+        y + dripLength + random(14, 38),
+        dripColor,
+        1
+      );
+    }
+  }
+}
+
+function addFinalScratches() {
+  const c = palette();
+
+  for (let i = 0; i < 130; i++) {
+    drawSkinnyRect(
+      random(width),
+      random(height),
+      random(24, 160),
+      random(1, 4),
+      random([-45, -22, 0, 22, 45, 90]) + random(-5, 5),
+      random([c.paleGreen, c.grayGreen, c.shadow]),
+      random(50, 125)
+    );
+  }
+
+  noFill();
+  stroke(c.shadow);
+  strokeWeight(12);
+  rect(width / 2, height / 2, width - 22, height - 22);
+  stroke(c.paleGreen);
+  strokeWeight(2);
+  rect(width / 2, height / 2, width - 42, height - 42);
+}
+
+function drawRectTile(cx, cy, w, h, rotation, fillColor, weight) {
+  const c = palette();
+
+  push();
+  translate(cx, cy);
+  rotate(rotation);
+
+  noStroke();
+  fill(0, 0, 0, 72);
+  rect(8, 8, w, h);
+
+  stroke(c.shadow);
+  strokeWeight(weight + 2);
+  fill(fillColor);
+  rect(0, 0, w, h);
+
+  stroke(c.paleGreen);
+  strokeWeight(max(1, weight * 0.28));
+  noFill();
+  rect(0, 0, w * 0.94, h * 0.86);
+
+  pop();
+}
+
+function drawTriangleTile(x1, y1, x2, y2, x3, y3, fillColor, weight) {
+  const c = palette();
+
+  noStroke();
+  fill(0, 0, 0, 78);
+  triangle(x1 + 8, y1 + 8, x2 + 8, y2 + 8, x3 + 8, y3 + 8);
+
+  stroke(c.shadow);
+  strokeWeight(weight + 2);
+  fill(fillColor);
+  triangle(x1, y1, x2, y2, x3, y3);
+
+  stroke(c.paleGreen);
+  strokeWeight(max(1, weight * 0.22));
+  noFill();
+
+  const mx = (x1 + x2 + x3) / 3;
+  const my = (y1 + y2 + y3) / 3;
+  triangle(
+    lerp(x1, mx, 0.12),
+    lerp(y1, my, 0.12),
+    lerp(x2, mx, 0.12),
+    lerp(y2, my, 0.12),
+    lerp(x3, mx, 0.12),
+    lerp(y3, my, 0.12)
+  );
+}
+
+function drawSkinnyRect(cx, cy, w, h, rotation, fillColor, alphaValue) {
+  push();
+  translate(cx, cy);
+  rotate(rotation);
+
+  noStroke();
+  fill(red(fillColor), green(fillColor), blue(fillColor), alphaValue);
+  rect(0, 0, w, h);
+
+  pop();
+}
+
+function shiftGreen(baseColor, amount) {
+  return color(
+    constrain(red(baseColor) + amount * 0.35, 0, 255),
+    constrain(green(baseColor) + amount, 0, 255),
+    constrain(blue(baseColor) + amount * 0.25, 0, 255)
+  );
+}
