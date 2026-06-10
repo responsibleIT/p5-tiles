@@ -2,16 +2,16 @@
 // Ref: purple / pink vertical ripple image
 
 function setup() {
-  createCanvas(400, 400);
+  createCanvas(1920, 1080); // Changed canvas size to 1920 x 1080
   pixelDensity(1);
-  noLoop();          // één stilstaand beeld
+  noLoop(); // één stilstaand beeld
 }
 
 function draw() {
   colorMode(RGB, 255);
   background(10);
 
-  let stripeW = 4;   // breedte van één verticale ribbel
+  let stripeW = 8; // Adjusted stripe width to maintain proportionality
 
   let topPurple = color('#c8b3ff');
   let midPurple = color('#9a7fe0');

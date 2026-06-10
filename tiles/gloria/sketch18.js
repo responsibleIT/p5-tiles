@@ -1,9 +1,18 @@
 var folds = [];
 var hoverAmount = 0;
-var shadeOptions = [32, 48, 70, 92, 122, 158, 205, 238];
+var shadeOptions = [
+  color('#4E2A1E'), // Deep chocolate brown
+  color('#8A4A2A'), // Warm red-brown
+  color('#C06733'), // Burnt orange
+  color('#E59B5E'), // Soft peach/orange
+  color('#F3D8A3'), // Creamy beige
+  color('#A79FA0'), // Medium warm gray
+  color('#CBC4C3'), // Light gray
+  color('#2E2626')  // Dark charcoal outline
+];
 
 function setup() {
-  createCanvas(400, 400);
+  createCanvas(1920, 1080);
   pixelDensity(2);
   noStroke();
 
@@ -25,7 +34,7 @@ function setup() {
 }
 
 function draw() {
-  background(8);
+  background('#4E2A1E'); // Deep chocolate brown
 
   var insideCanvas = mouseX >= 0 && mouseX <= width && mouseY >= 0 && mouseY <= height;
   var targetHover = insideCanvas ? 1 : 0;
@@ -38,7 +47,7 @@ function draw() {
 }
 
 function drawQuietGrid() {
-  stroke(255, 24);
+  stroke('#CBC4C3'); // Light gray
   strokeWeight(1);
 
   for (var x = 40; x < width; x += 40) {
@@ -74,9 +83,9 @@ function drawFoldedField() {
 }
 
 function drawFold(size, shade, influence) {
-  var highlight = constrain(shade + 44 + influence * 34, 0, 255);
-  var shadow = constrain(shade - 42, 0, 255);
-  var mid = constrain(shade + influence * 22, 0, 255);
+  var highlight = lerpColor(shade, color(255), 0.2 + influence * 0.1);
+  var shadow = lerpColor(shade, color(0), 0.2);
+  var mid = lerpColor(shade, color(255), 0.1 + influence * 0.05);
 
   fill(shadow);
   triangle(-size * 0.72, -size * 0.18, size * 0.08, -size * 0.56, -size * 0.12, size * 0.34);
@@ -97,4 +106,18 @@ function drawCenterSilhouette() {
 
   push();
   translate(width / 2, height / 2);
-  rotate(PI / 4 + hoverAmount * 0.18);}
+  rotate(PI / 4 + hoverAmount * 0.18);
+
+  fill('#2E2626'); // Dark charcoal
+  rectMode(CENTER);
+  rect(0, 0, 120 + breathing + reveal, 120 + breathing + reveal, 16);
+
+  pop();
+}
+
+function drawFrame() {
+  noFill();
+  stroke('#2E2626'); // Dark charcoal
+  strokeWeight(12);
+  rect(6, 6, width - 12, height - 12, 24);
+}

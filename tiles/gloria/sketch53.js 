@@ -37,14 +37,15 @@ function setup() {
   randomSeed(18);
   noiseSeed(18);
 
-  jungleBlack = color(142, 80, 6, 100);
-  jungleDark = color(138, 74, 12, 100);
-  deepGreen = color(134, 70, 20, 100);
-  mossGreen = color(102, 56, 36, 100);
-  leafGreen = color(122, 64, 48, 100);
-  sunGreen = color(78, 48, 72, 100);
-  hazeGreen = color(92, 24, 78, 100);
-  goldMist = color(58, 36, 86, 100);
+  // Switched colors around
+  jungleBlack = color(58, 36, 86, 100);
+  jungleDark = color(92, 24, 78, 100);
+  deepGreen = color(78, 48, 72, 100);
+  mossGreen = color(122, 64, 48, 100);
+  leafGreen = color(102, 56, 36, 100);
+  sunGreen = color(134, 70, 20, 100);
+  hazeGreen = color(138, 74, 12, 100);
+  goldMist = color(142, 80, 6, 100);
 
   buildBaseCanopy();
   buildAtmosphere();

@@ -1,7 +1,5 @@
-// Simple denim texture with vertical fade (400x400, static)
-
 function setup() {
-  createCanvas(400, 400);
+  createCanvas(1920, 1080);
   pixelDensity(1);
   noLoop();
 }

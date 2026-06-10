@@ -1,4 +1,4 @@
-const CANVAS_SIZE = 400;
+const CANVAS_SIZE = 1920;
 const CELL = 50;
 const HOVER_RADIUS = 82;
 
@@ -11,9 +11,10 @@ const lightBlue = "#9EB9FF";
 const lineNavy = "#111B55";
 const deepNavy = "#071039";
 const glowBlue = "#D9E5FF";
+const oliveGreen = "#8B8251";
 
 function setup() {
-  createCanvas(CANVAS_SIZE, CANVAS_SIZE);
+  createCanvas(CANVAS_SIZE, 1080);
   pixelDensity(2);
   frameRate(30);
   strokeCap(ROUND);
@@ -25,7 +26,7 @@ function setup() {
 }
 
 function draw() {
-  background(clothBlue);
+  background(oliveGreen);
   drawBlueWash();
   drawWovenTexture();
 
@@ -98,6 +99,7 @@ class MazeMotif {
     pop();
   }
 }
+
 function makeMotifPoints(type) {
   if (type === 0) {
     return [

@@ -1,4 +1,4 @@
-const CANVAS_SIZE = 400;
+const CANVAS_SIZE = { width: 1920, height: 1080 };
 const COLS = 8;
 const ROWS = 10;
 const HOVER_RADIUS = 95;
@@ -10,7 +10,7 @@ let ink;
 let cursorHasVisited = false;
 
 function setup() {
-  createCanvas(CANVAS_SIZE, CANVAS_SIZE);
+  createCanvas(CANVAS_SIZE.width, CANVAS_SIZE.height);
   pixelDensity(2);
   frameRate(30);
   noStroke();
